@@ -1,13 +1,13 @@
+# app.py — 디자인 리팩터링 (기능 동일)
 import os
 import re
 import pandas as pd
 import streamlit as st
 import psycopg
 from openai import OpenAI
-
 from dotenv import load_dotenv
-load_dotenv()
 
+load_dotenv()
 
 # ----------------- 환경변수/시크릿 -----------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
@@ -21,13 +21,136 @@ if not OPENAI_API_KEY:
     st.stop()
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-st.set_page_config(page_title="회사 데이터 챗봇(정형 데이터 전용)", page_icon="📈", layout="wide")
-st.title("회사 데이터 챗봇 — 정형 데이터(SQL)만 사용")
+# ----------------- 페이지/테마 -----------------
+st.set_page_config(page_title="보험사 경영공시 데이터 챗봇", page_icon="📊", layout="wide")
 
+# Pretendard + 글로벌 스타일 (Tailwind 느낌의 톤앤매너)
+st.markdown("""
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+
+<style>
+:root {
+  --blue:#0064FF;
+  --blue-dark:#0050CC;
+  --bg:#F0F1F3;
+  --text:#0f172a;
+  --muted:#64748b;
+  --card:#ffffff;
+  --ring:#93c5fd;
+}
+html, body, [data-testid="stAppViewContainer"] {
+  background: var(--bg) !important;
+}
+* { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue',
+     'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif !important; }
+
+.container-card {
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(2, 6, 23, 0.06);
+  border: 1px solid #eef2f7;
+}
+.header {
+  padding: 32px 32px 16px 32px;
+  border-bottom: 1px solid #eef2f7;
+  text-align: center;
+}
+.header h1 {
+  margin: 0; padding: 0;
+  font-size: 28px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+}
+.header .byline {
+  color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85;
+}
+.section {
+  padding: 24px 32px 28px 32px;
+}
+.hint {
+  text-align:center; color:#475569; font-size: 16px; margin-bottom: 14px;
+}
+.input-like label { display:none!important; }
+.input-like .stTextInput>div>div>input {
+  height: 56px; font-size: 18px; padding: 0 18px;
+  background:#f3f4f6; border:1px solid #e5e7eb; border-radius:12px;
+}
+.input-like .stTextInput>div>div>input:focus { outline: none; border-color: var(--ring); box-shadow: 0 0 0 3px rgba(147,197,253,.45); }
+
+.stButton>button {
+  width:100%; height:54px; font-weight:700; font-size:18px;
+  color:#fff; background: var(--blue);
+  border-radius:12px; border:0;
+  box-shadow: 0 2px 0 rgba(0,0,0,.03);
+}
+.stButton>button:hover { background: var(--blue-dark); }
+.stButton>button:disabled { background:#d1d5db !important; color:#fff !important; }
+
+.kpi {
+  display:flex; gap:12px; align-items:center; justify-content:center; margin-top:8px;
+  color:#6b7280; font-size:14px;
+}
+.badge {
+  background:#eef2ff; color:#3730a3; padding:6px 10px; border-radius:999px; font-weight:600; font-size:12px;
+}
+
+.card-subtitle { color:#334155; font-size:18px; margin: 0 0 10px; text-align:center; }
+
+.table-container .stDataFrame { border-radius:12px; overflow:hidden; border: 1px solid #e5e7eb; }
+hr.sep { border:none; border-top:1px solid #eef2f7; margin: 20px 0; }
+
+.small-note { color:#64748b; font-size:13px; margin-top:4px;}
+.footer-note { color:#64748b; font-size:12px; text-align:center; margin-top:16px; }
+
+.fadein { animation: fadeIn .5s ease; }
+@keyframes fadeIn { from{opacity:0; transform: translateY(6px)} to{opacity:1; transform:none} }
+
+/* code block polish */
+pre, code { font-size: 13px !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ----------------- 헤더 -----------------
+st.markdown('<div class="container-card fadein">', unsafe_allow_html=True)
+st.markdown("""
+<div class="header">
+  <div style="display:flex; gap:10px; align-items:center; justify-content:center;">
+    <h1>보험사 경영공시 데이터 <span style="color:var(--text)">챗봇</span></h1>
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"
+         fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 8V4H8V8H12Z" />
+      <path d="M16 8V4H12V8H16Z" />
+      <path d="M12 14V12H8V14H12Z" />
+      <path d="M16 14V12H12V14H16Z" />
+      <path d="M6 18H18V16H6V18Z" />
+      <path d="M6 12H4V10H6V12Z" />
+      <path d="M20 12H18V10H20V12Z" />
+      <path d="M6 8H4V6H6V8Z" />
+      <path d="M20 8H18V6H20V8Z" />
+      <path d="M10 22H14V20H10V22Z" />
+      <path d="M4 4H2V2H4V4Z" />
+      <path d="M22 4H20V2H22V4Z" />
+    </svg>
+  </div>
+  <div class="byline">made by 태훈 · 정형 데이터(SQL) 전용</div>
+  <div class="kpi">
+    <span class="badge">DB 연결</span>
+    <span>Host: <b>{host}</b></span>
+    <span>·</span>
+    <span>User: <b>{user}</b></span>
+  </div>
+</div>
+""".format(host=DB_HOST or "-", user=DB_USER or "-"), unsafe_allow_html=True)
+
+st.markdown('<div class="section">', unsafe_allow_html=True)
+st.markdown('<p class="hint">현재 보유데이터는 2022~2024년 가정변경효과 · K-ICS 비율</p>', unsafe_allow_html=True)
+
+# ----------------- 사이드바 (상태 영역) -----------------
 with st.sidebar:
     st.markdown("### 연결 상태")
     st.write(f"DB Host: {DB_HOST}")
     st.write(f"DB User: {DB_USER}")
+    st.caption("좌측 버튼 흐름대로 진행하세요. (① SQL 생성 → ② 실행 → ③ 차트/요약)")
 
 # ----------------- SQL 생성 시스템 프롬프트 -----------------
 SQL_SYSTEM_PROMPT = """You are a PostgreSQL SQL generator.
@@ -46,7 +169,6 @@ Return ONLY a SQL query (no backticks). Rules:
 - When unsure, default to selecting limited rows with sensible filters, not *
 """
 
-# (선택) 간단한 한글→코드/메트릭 매핑 힌트
 COMPANY_MAP = {
     "농협생명": "NH",
     "NH농협생명": "NH",
@@ -63,7 +185,6 @@ METRIC_MAP = {
 }
 
 def apply_simple_mapping(q: str) -> str:
-    # 질문에서 회사/지표를 영문 코드로 유도하는 텍스트 힌트 생성
     hints = []
     for k, v in COMPANY_MAP.items():
         if k in q:
@@ -85,16 +206,11 @@ def generate_sql(user_question: str) -> str:
         temperature=0
     )
     sql = resp.choices[0].message.content.strip()
-
-    # --- 안전장치 ---
     if not re.match(r"(?is)^\s*select\s", sql):
         raise ValueError("Only SELECT queries are allowed.")
     banned = r"(?is)\b(insert|update|delete|drop|alter|create|grant|revoke|truncate)\b"
     if re.search(banned, sql):
         raise ValueError("Blocked SQL keyword detected.")
-    # 너무 광범위한 SELECT * 방지(권장): 필요시 주석 해제
-    # if re.search(r"(?is)select\s+\*\s+from", sql):
-    #     raise ValueError("SELECT * is blocked. Please select named columns.")
     return sql
 
 def run_sql(sql: str) -> pd.DataFrame:
@@ -102,7 +218,6 @@ def run_sql(sql: str) -> pd.DataFrame:
         return pd.read_sql_query(sql, conn)
 
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
-    # 결과 요약 멘트 (간단한 LLM 요약)
     preview_csv = df.head(20).to_csv(index=False)
     prompt = f"""질문: {q}
 아래 CSV 일부를 참고해서 3문장 이내로 한국어 요약을 써줘. 단위와 기간을 분명히 써.
@@ -116,16 +231,31 @@ CSV 미리보기(최대 20행):
     )
     return r.choices[0].message.content.strip()
 
-# ----------------- UI -----------------
-q = st.text_input("질문을 입력하세요 (예: 'NH농협생명 2023년 매출 월별 추이 보여줘')")
+# ----------------- 입력창 -----------------
+st.markdown('<div class="input-like">', unsafe_allow_html=True)
+q = st.text_input(
+    label="질문",
+    placeholder="예) 2023년 NH농협생명 매출 월별 추이 보여줘",
+    label_visibility="collapsed",
+    key="q_input"
+)
+st.markdown('</div>', unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
-with col1:
-    st.subheader("① SQL 생성")
-    if st.button("SQL 만들기"):
-        if not q:
-            st.warning("질문을 입력하세요.")
-        else:
+# ----------------- 버튼 & 흐름 -----------------
+c1, c2 = st.columns([1,1])
+with c1:
+    st.markdown('<p class="card-subtitle">① SQL 생성</p>', unsafe_allow_html=True)
+    make_sql = st.button("SQL 만들기", use_container_width=True)
+with c2:
+    st.markdown('<p class="card-subtitle">② SQL 실행</p>', unsafe_allow_html=True)
+    run_btn = st.button("실행", use_container_width=True)
+
+# SQL 만들기
+if make_sql:
+    if not q:
+        st.warning("질문을 입력하세요.")
+    else:
+        with st.spinner("SQL을 생성하는 중..."):
             try:
                 sql = generate_sql(q)
                 st.code(sql, language="sql")
@@ -133,25 +263,30 @@ with col1:
             except Exception as e:
                 st.error(f"SQL 생성 오류: {e}")
 
-with col2:
-    st.subheader("② SQL 실행")
-    if st.button("실행"):
-        sql = st.session_state.get("sql")
-        if not sql:
-            st.warning("먼저 'SQL 만들기'를 클릭하세요.")
-        else:
+st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
+
+# 실행
+if run_btn:
+    sql = st.session_state.get("sql")
+    if not sql:
+        st.warning("먼저 'SQL 만들기'를 클릭하세요.")
+    else:
+        with st.spinner("DB에서 데이터 조회 중..."):
             try:
                 df = run_sql(sql)
                 if df.empty:
                     st.info("결과가 없습니다.")
                 else:
+                    st.markdown('<div class="table-container">', unsafe_allow_html=True)
                     st.dataframe(df, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
                     st.session_state["df"] = df
             except Exception as e:
                 st.error(f"DB 실행 오류: {e}")
 
-st.markdown("---")
-st.subheader("③ 차트 & 요약")
+# ----------------- 차트 & 요약 -----------------
+st.markdown('<div class="container-card section fadein">', unsafe_allow_html=True)
+st.markdown('<p class="card-subtitle">③ 차트 & 요약</p>', unsafe_allow_html=True)
 
 df_prev = st.session_state.get("df")
 if df_prev is not None and not df_prev.empty:
@@ -174,14 +309,26 @@ if df_prev is not None and not df_prev.empty:
                     break
             if y_col:
                 st.line_chart(df_plot.set_index(date_col)[y_col])
-        except Exception as _:
+        except Exception:
             pass
 
-    if st.button("요약 생성"):
-        try:
-            summary = summarize_answer(q, df_prev)
-            st.write(summary)
-        except Exception as e:
-            st.error(f"요약 오류: {e}")
+    col_a, col_b = st.columns([1,1])
+    with col_a:
+        gen_sum = st.button("요약 생성", use_container_width=True)
+    with col_b:
+        st.caption("차트 영역은 time-series일 때 자동 표시됩니다.")
+
+    if gen_sum:
+        with st.spinner("요약 생성 중..."):
+            try:
+                summary = summarize_answer(q, df_prev)
+                st.success(summary)
+            except Exception as e:
+                st.error(f"요약 오류: {e}")
 else:
     st.caption("실행 결과가 표시되면 차트와 요약을 볼 수 있습니다.")
+
+st.markdown('</div>', unsafe_allow_html=True)  # container-card
+st.markdown('</div>', unsafe_allow_html=True)  # 상단 container-card 종료
+
+st.markdown('<p class="footer-note">UI만 변경 · 기능 로직은 원본과 동일합니다.</p>', unsafe_allow_html=True)
