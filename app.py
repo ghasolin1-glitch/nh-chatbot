@@ -1,5 +1,6 @@
 # app.py — 디자인 리팩터링 (기능 동일)
 import os
+import json
 import re
 import pandas as pd
 import streamlit as st
@@ -200,12 +201,24 @@ def generate_sql(user_question: str) -> str:
         {"role": "system", "content": SQL_SYSTEM_PROMPT + hints},
         {"role": "user", "content": user_question},
     ]
+    # OpenAI prompt debug (SQL generation)
+    try:
+        st.markdown("OpenAI 프롬프트 (SQL 생성)")
+        st.code(json.dumps(messages, ensure_ascii=False, indent=2), language="json")
+    except Exception:
+        pass
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages,
         temperature=0
     )
     sql = resp.choices[0].message.content.strip()
+    # OpenAI response debug (SQL generation)
+    try:
+        st.markdown("OpenAI 응답 (SQL 생성)")
+        st.code(sql, language="sql")
+    except Exception:
+        pass
     if not re.match(r"(?is)^\s*select\s", sql):
         raise ValueError("Only SELECT queries are allowed.")
     banned = r"(?is)\b(insert|update|delete|drop|alter|create|grant|revoke|truncate)\b"
@@ -224,12 +237,25 @@ def summarize_answer(q: str, df: pd.DataFrame) -> str:
 CSV 미리보기(최대 20행):
 {preview_csv}
 """
+    # OpenAI prompt debug (summary)
+    try:
+        st.markdown("OpenAI 프롬프트 (요약)")
+        st.code(prompt, language="markdown")
+    except Exception:
+        pass
     r = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role":"user","content": prompt}],
         temperature=0.2
     )
-    return r.choices[0].message.content.strip()
+    summary_text = r.choices[0].message.content.strip()
+    # OpenAI response debug (summary)
+    try:
+        st.markdown("OpenAI 응답 (요약)")
+        st.code(summary_text)
+    except Exception:
+        pass
+    return summary_text
 
 # ----------------- 입력창 -----------------
 st.markdown('<div class="input-like">', unsafe_allow_html=True)
