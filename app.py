@@ -1,10 +1,16 @@
-# app.py — 디자인 리팩터링 (기능 동일)
+# app.py — 디자인 리팩터링 (기능 동일, LangChain SQL Agent 적용)
 import os
 import json
 import re
 import pandas as pd
 import streamlit as st
 import psycopg
+
+# ====== LangChain / OpenAI LLM ======
+from langchain_community.utilities import SQLDatabase
+from langchain_community.agent_toolkits import create_sql_agent
+from langchain_openai import ChatOpenAI
+# ====================================
 
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -13,7 +19,7 @@ load_dotenv()
 
 # ----------------- 환경변수/시크릿 -----------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
-DB_HOST = os.getenv("DB_HOST") or st.secrets.get("DB_HOST")         # e.g., abc.supabase.co
+DB_HOST = os.getenv("DB_HOST") or st.secrets.get("DB_HOST")         # e.g., aws-1-us-east-1.pooler.supabase.com
 DB_NAME = os.getenv("DB_NAME") or st.secrets.get("DB_NAME", "postgres")
 DB_USER = os.getenv("DB_USER") or st.secrets.get("DB_USER", "readonly")
 DB_PASS = os.getenv("DB_PASS") or st.secrets.get("DB_PASS")
@@ -22,6 +28,57 @@ DB_PORT = int(os.getenv("DB_PORT") or st.secrets.get("DB_PORT", 5432))
 if not OPENAI_API_KEY:
     st.stop()
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+# ====== LangChain용 DB/LLM/에이전트 초기화 ======
+# SQLAlchemy 연결문자열 (psycopg v3 드라이버) + sslmode=require
+SQLALCHEMY_URI = (
+    f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    "?sslmode=require"
+)
+
+# 에이전트에게 “쿼리만 출력, 실행/설명 금지”를 못박는 프리픽스
+AGENT_PREFIX = """
+당신은 PostgreSQL SQL 전문가다. 다음 규칙을 반드시 지켜라.
+
+- 오직 'SELECT'만 작성한다. (INSERT/UPDATE/DELETE/ALTER/DROP/CREATE/GRANT/REVOKE/TRUNCATE 금지)
+- 결과는 SQL만 내보낸다. 백틱/설명/자연어/코드블록 없이 SQL 한 덩어리만 출력한다.
+- 대상 테이블: company_financials(company_code text, date date, metric text, value numeric)
+- 시계열을 조회할 때는 항상 ORDER BY date를 포함한다.
+- 한국어 질의의 의미를 스스로 판단해 컬럼/값을 매핑한다.
+  예: '매출/수익'→ metric='revenue', '자산'→ 'assets', '부채'→ 'liabilities', 'K-ICS/킥스'→ 'k_ics'
+- 회사명/약칭/별칭 등은 사용자가 한국어로 적더라도 스스로 합리적 company_code를 추론한다.
+  (모호하면 LIMIT를 두고 합리적인 필터로 시작한다.)
+- SELECT * 대신 필요한 컬럼만 선택하고, where 절에 기간/회사/지표 필터를 상식적으로 건다.
+- 안전을 위해 LIMIT 200을 기본 상한으로 둔다(사용자가 특정 기간을 명시했다면 그 기간 기준).
+
+예시)
+-- 질문: 2023년 NH농협생명 매출 월별 추이
+SELECT date, value
+FROM company_financials
+WHERE metric='revenue'
+  AND date >= '2023-01-01' AND date < '2024-01-01'
+  -- company_code는 NH농협생명에 해당하는 값으로 합리적으로 추론
+ORDER BY date
+LIMIT 200;
+""".strip()
+
+# OpenAI Chat 모델 (LangChain용)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
+
+# lazy 초기화: 앱 시작 시 즉시 접속하지 않음 (DNS/네트워크 이슈 회피)
+@st.cache_resource(show_spinner=False)
+def get_lc_db():
+    return SQLDatabase.from_uri(SQLALCHEMY_URI)
+
+def get_sql_agent():
+    lc_db = get_lc_db()
+    return create_sql_agent(
+        llm=llm,
+        db=lc_db,
+        agent_type="openai-tools",
+        verbose=False,
+        prefix=AGENT_PREFIX,
+    )
 
 # ----------------- 페이지/테마 -----------------
 st.set_page_config(page_title="보험사 경영공시 데이터 챗봇", page_icon="📊", layout="wide")
@@ -154,81 +211,63 @@ with st.sidebar:
     st.write(f"DB User: {DB_USER}")
     st.caption("좌측 버튼 흐름대로 진행하세요. (① SQL 생성 → ② 실행 → ③ 차트/요약)")
 
-# ----------------- SQL 생성 시스템 프롬프트 -----------------
-SQL_SYSTEM_PROMPT = """You are a PostgreSQL SQL generator.
-Return ONLY a SQL query (no backticks). Rules:
-- Use SELECT queries ONLY (no INSERT/UPDATE/DELETE/ALTER/DROP/CREATE/GRANT/REVOKE).
-- Target table: company_financials(company_code text, date date, metric text, value numeric)
-- Always include ORDER BY date when selecting time series.
-- Examples:
-  Q: 2023년 NH농협생명 revenue 월별
-  A: SELECT date, value FROM company_financials
-     WHERE company_code='NH' AND metric='revenue'
-       AND date >= '2023-01-01' AND date < '2024-01-01'
-     ORDER BY date;
-
-- Map common Korean phrasing to fields logically (e.g., '매출' -> metric='revenue').
-- When unsure, default to selecting limited rows with sensible filters, not *
-"""
-
-COMPANY_MAP = {
-    "농협생명": "NH",
-    "NH농협생명": "NH",
-    "한화생명": "HANWHA",
-    "삼성생명": "SAMSUNG",
-}
-METRIC_MAP = {
-    "매출": "revenue",
-    "자산": "assets",
-    "부채": "liabilities",
-    "수익": "revenue",
-    "solvency": "solvency_ratio",
-    "k-ics": "k_ics",
-}
-
-def apply_simple_mapping(q: str) -> str:
-    hints = []
-    for k, v in COMPANY_MAP.items():
-        if k in q:
-            hints.append(f"company_code should be '{v}' for '{k}'")
-    for k, v in METRIC_MAP.items():
-        if k.lower() in q.lower():
-            hints.append(f"metric should be '{v}' for '{k}'")
-    return ("\nHINTS:\n" + "\n".join(hints)) if hints else ""
+# ----------------- SQL 생성 (LangChain Agent) -----------------
+def _strip_code_fences(text: str) -> str:
+    """```sql ...``` 같은 펜스를 제거"""
+    t = text.strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
+        t = re.sub(r"\s*```$", "", t)
+    return t.strip()
 
 def generate_sql(user_question: str) -> str:
-    hints = apply_simple_mapping(user_question)
-    messages = [
-        {"role": "system", "content": SQL_SYSTEM_PROMPT + hints},
-        {"role": "user", "content": user_question},
-    ]
-    # OpenAI prompt debug (SQL generation)
+    """
+    LangChain create_sql_agent를 사용해 '실행하지 않고' SQL만 생성.
+    """
+    # 프롬프트/입력 디버그
     try:
-        st.markdown("OpenAI 프롬프트 (SQL 생성)")
-        st.code(json.dumps(messages, ensure_ascii=False, indent=2), language="json")
+        st.markdown("OpenAI 프롬프트 (SQL 생성; LangChain Agent prefix)")
+        st.code(AGENT_PREFIX, language="markdown")
+        st.markdown("User 입력")
+        st.code(user_question)
     except Exception:
         pass
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        temperature=0
-    )
-    sql = resp.choices[0].message.content.strip()
-    # OpenAI response debug (SQL generation)
-    try:
-        st.markdown("OpenAI 응답 (SQL 생성)")
-        st.code(sql, language="sql")
-    except Exception:
-        pass
+
+    sql_agent = get_sql_agent()  # lazy 생성/접속
+    result = sql_agent.invoke({"input": user_question})
+    if isinstance(result, dict):
+        text = result.get("output") or result.get("final_answer") or json.dumps(result, ensure_ascii=False)
+    else:
+        text = str(result)
+
+    sql = _strip_code_fences(text)
+
+    # 안전검증: SELECT 전용 + 금지어 차단
     if not re.match(r"(?is)^\s*select\s", sql):
         raise ValueError("Only SELECT queries are allowed.")
     banned = r"(?is)\b(insert|update|delete|drop|alter|create|grant|revoke|truncate)\b"
     if re.search(banned, sql):
         raise ValueError("Blocked SQL keyword detected.")
+
+    # 응답 디버그
+    try:
+        st.markdown("OpenAI 응답 (SQL 생성)")
+        st.code(sql, language="sql")
+    except Exception:
+        pass
+
     return sql
 
 def run_sql(sql: str) -> pd.DataFrame:
-    with psycopg.connect(host=DB_HOST, dbname=DB_NAME, user=DB_USER, password=DB_PASS, port=DB_PORT) as conn:
+    # psycopg 연결에도 sslmode=require 적용
+    with psycopg.connect(
+        host=DB_HOST,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        port=DB_PORT,
+        sslmode="require",
+    ) as conn:
         return pd.read_sql_query(sql, conn)
 
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
@@ -238,7 +277,6 @@ def summarize_answer(q: str, df: pd.DataFrame) -> str:
 CSV 미리보기(최대 20행):
 {preview_csv}
 """
-    # OpenAI prompt debug (summary)
     try:
         st.markdown("OpenAI 프롬프트 (요약)")
         st.code(prompt, language="markdown")
@@ -250,7 +288,6 @@ CSV 미리보기(최대 20행):
         temperature=0.2
     )
     summary_text = r.choices[0].message.content.strip()
-    # OpenAI response debug (summary)
     try:
         st.markdown("OpenAI 응답 (요약)")
         st.code(summary_text)

@@ -3,3 +3,9 @@ psycopg[binary]>=3.1
 openai>=1.40
 pandas>=2.2
 python-dotenv>=1.0
+
+# === LangChain/SQLAlchemy 추가 ===
+langchain>=0.2.14
+langchain-community>=0.2.11
+langchain-openai>=0.1.22
+SQLAlchemy>=2.0
