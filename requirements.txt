@@ -1,7 +1,13 @@
-streamlit>=1.33
-psycopg[binary]>=3.1
-openai>=1.40
-pandas>=2.2
-python-dotenv>=1.0
+streamlit>=1.50.0
+pandas>=2.2.2
+python-dotenv>=1.0.1
+openai>=1.40.0
+
+# LangChain 관련
+langchain>=0.2.14
 langchain-community>=0.2.8
 langchain-openai>=0.2.3
+
+# DB 관련
+sqlalchemy>=2.0.0
+psycopg[binary]>=3.2.1
