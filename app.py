@@ -35,29 +35,19 @@ SQLALCHEMY_URI = (
     "?sslmode=require"
 )
 
+# 🚫 예시는 모델이 그대로 베끼는 경우가 많아 제거
 AGENT_PREFIX = """
 당신은 PostgreSQL SQL 전문가다. 다음 규칙을 반드시 지켜라.
 
 - 오직 'SELECT'만 작성한다. (INSERT/UPDATE/DELETE/ALTER/DROP/CREATE/GRANT/REVOKE/TRUNCATE 금지)
-- 결과는 SQL만 내보낸다. 백틱/설명/자연어/코드블록 없이 SQL 한 덩어리만 출력한다.
-- 대상 테이블: company_financials(company_code text, date date, metric text, value numeric)
+- 결과는 SQL만 내보낸다. 백틱/설명/자연어/코드블록/주석 없이 SQL 한 문장만 출력한다.
+- 대상 테이블: kics_solvency_data_flexible
 - 시계열을 조회할 때는 항상 ORDER BY date를 포함한다.
 - 한국어 질의의 의미를 스스로 판단해 컬럼/값을 매핑한다.
   예: '매출/수익'→ metric='revenue', '자산'→ 'assets', '부채'→ 'liabilities', 'K-ICS/킥스'→ 'k_ics'
-- 회사명/약칭/별칭 등은 사용자가 한국어로 적더라도 스스로 합리적 company_code를 추론한다.
-  (모호하면 LIMIT를 두고 합리적인 필터로 시작한다.)
+- 회사명/약칭/별칭 등은 사용자가 한국어로 적더라도 스스로 합리적 company_code를 추론한다. (모호하면 LIMIT 300으로 시작)
 - SELECT * 대신 필요한 컬럼만 선택하고, where 절에 기간/회사/지표 필터를 상식적으로 건다.
-- 안전을 위해 LIMIT 200을 기본 상한으로 둔다(사용자가 특정 기간을 명시했다면 그 기간 기준).
-
-예시)
--- 질문: 2023년 NH농협생명 매출 월별 추이
-SELECT date, value
-FROM company_financials
-WHERE metric='revenue'
-  AND date >= '2023-01-01' AND date < '2024-01-01'
-  -- company_code는 NH농협생명에 해당하는 값으로 합리적으로 추론
-ORDER BY date
-LIMIT 200;
+- 첫 토큰은 반드시 SELECT, CTE/WITH/EXPLAIN 금지. 세미콜론은 최대 1개만 허용.
 """.strip()
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
@@ -75,6 +65,53 @@ def get_sql_agent():
         verbose=False,
         prefix=AGENT_PREFIX,
     )
+
+# ----------------- 유틸: 출력 정리/검증 -----------------
+def _strip_code_fences(text: str) -> str:
+    """```sql ...``` 같은 펜스 제거"""
+    t = text.strip()
+    # 앞쪽 펜스
+    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
+    # 뒤쪽 펜스
+    t = re.sub(r"\s*```$", "", t)
+    return t.strip()
+
+def _remove_sql_comments(sql: str) -> str:
+    """-- 주석, /* */ 주석 제거 (문자열 리터럴 고려 X: 생성 SQL만 전제)"""
+    # 블록 주석
+    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.S)
+    # 라인 주석
+    sql = re.sub(r"^\s*--.*?$", "", sql, flags=re.M)
+    return sql.strip()
+
+def _extract_first_select(text: str) -> str:
+    """
+    임의의 설명이 섞여도 첫 번째 SELECT 문만 추출.
+    SELECT ... ; 까지 캡처. 세미콜론이 없다면 문자열 끝까지.
+    """
+    # 코드펜스/주석 제거
+    cleaned = _remove_sql_comments(_strip_code_fences(text))
+    m = re.search(r"(?is)\bselect\b", cleaned)
+    if not m:
+        return cleaned.strip()
+    start = m.start()
+    tail = cleaned[start:]
+    # 첫 세미콜론까지만 취한다(없으면 전체)
+    semi = re.search(r";", tail)
+    return (tail[:semi.start()] if semi else tail).strip()
+
+def _validate_sql_is_select(sql: str):
+    """첫 토큰 SELECT, 금지어 차단, 세미콜론 과다 차단"""
+    # 세미콜론 1개 초과 금지
+    if sql.count(";") > 1:
+        raise ValueError("Multiple statements are not allowed.")
+    # 첫 토큰 SELECT
+    if not re.match(r"(?is)^\s*select\b", sql):
+        raise ValueError("Only SELECT queries are allowed.")
+    # 블랙리스트(부수효과/CTE/설명 금지)
+    banned = r"(?is)\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|into|explain|with)\b"
+    if re.search(banned, sql):
+        raise ValueError("Blocked SQL keyword detected.")
 
 # ----------------- 페이지/테마 -----------------
 st.set_page_config(page_title="보험사 경영공시 데이터 챗봇", page_icon="📊", layout="centered")
@@ -95,25 +132,12 @@ st.markdown("""
   --card:#ffffff;
   --ring:#93c5fd;
 }
-html, body, [data-testid="stAppViewContainer"] {
-  background: var(--bg) !important;
-}
+html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !important; }
 * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue',
      'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif !important; }
 
-/* 메인 컨테이너 폭 제한 + 모바일 패딩 */
-.block-container {
-  padding-top: 1.0rem;
-  padding-bottom: 1.5rem;
-  max-width: 860px;
-}
-@media (max-width: 640px) {
-  .block-container { 
-    padding-left: 0.8rem; 
-    padding-right: 0.8rem; 
-    max-width: 100%;
-  }
-}
+.block-container { padding-top: 1.0rem; padding-bottom: 1.5rem; max-width: 860px; }
+@media (max-width: 640px) { .block-container { padding-left: 0.8rem; padding-right: 0.8rem; max-width: 100%; } }
 
 .container-card {
   background: var(--card);
@@ -121,41 +145,24 @@ html, body, [data-testid="stAppViewContainer"] {
   box-shadow: 0 2px 12px rgba(2, 6, 23, 0.06);
   border: 1px solid #eef2f7;
 }
-.header {
-  padding: 24px 20px 12px 20px;
-  border-bottom: 1px solid #eef2f7;
-  text-align: center;
-}
-.header h1 {
-  margin: 0; padding: 0;
-  font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
-}
-.header .byline {
-  color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85;
-}
-.section {
-  padding: 18px 20px 22px 20px;
-}
+.header { padding: 24px 20px 12px 20px; border-bottom: 1px solid #eef2f7; text-align: center; }
+.header h1 { margin: 0; padding: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+.header .byline { color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85; }
+.section { padding: 18px 20px 22px 20px; }
 
-/* ===== 입력창: 화이트 배경 + 아주 옅은 라인 ===== */
 .input-like label { display:none!important; }
 .input-like .stTextInput>div>div>input {
   height: 52px; font-size: 17px; padding: 0 16px;
-  background:#ffffff;                 /* 화이트 배경 */
-  border:1px solid #e5e7eb;           /* 아주 옅은 라인 */
-  border-radius:12px;
+  background:#ffffff; border:1px solid #e5e7eb; border-radius:12px;
 }
 .input-like .stTextInput>div>div>input:focus {
-  outline: none;
-  border-color: #dbeafe;              /* 살짝 파란빛 */
-  box-shadow: 0 0 0 3px rgba(147,197,253,.35);
+  outline: none; border-color: #dbeafe; box-shadow: 0 0 0 3px rgba(147,197,253,.35);
 }
 
 .stButton>button {
   width:100%; height:52px; font-weight:700; font-size:17px;
   color:#fff; background: var(--blue);
-  border-radius:12px; border:0;
-  box-shadow: 0 2px 0 rgba(0,0,0,.03);
+  border-radius:12px; border:0; box-shadow: 0 2px 0 rgba(0,0,0,.03);
 }
 .stButton>button:hover { background: var(--blue-dark); }
 .stButton>button:disabled { background:#d1d5db !important; color:#fff !important; }
@@ -171,10 +178,8 @@ hr.sep { border:none; border-top:1px solid #eef2f7; margin: 18px 0; }
 .fadein { animation: fadeIn .5s ease; }
 @keyframes fadeIn { from{opacity:0; transform: translateY(6px)} to{opacity:1; transform:none} }
 
-/* code block polish */
 pre, code { font-size: 13px !important; }
 
-/* 모바일 타이포/간격 보정 */
 @media (max-width: 640px) {
   .header h1 { font-size: 22px; }
   .card-subtitle { font-size: 16px; }
@@ -210,18 +215,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="section">', unsafe_allow_html=True)
-# 👉 “현재 보유데이터는 …” 안내문 제거 (요청사항)
-# st.markdown('<p class="hint">현재 보유데이터는 2022~2024년 가정변경효과 · K-ICS 비율</p>', unsafe_allow_html=True)
 
 # ----------------- SQL 생성 (LangChain Agent) -----------------
-def _strip_code_fences(text: str) -> str:
-    """```sql ...``` 같은 펜스를 제거"""
-    t = text.strip()
-    if t.startswith("```"):
-        t = re.sub(r"^```[a-zA-Z]*\\s*", "", t)
-        t = re.sub(r"\\s*```$", "", t)
-    return t.strip()
-
 def generate_sql(user_question: str) -> str:
     """LangChain create_sql_agent를 사용해 '실행하지 않고' SQL만 생성."""
     try:
@@ -233,19 +228,19 @@ def generate_sql(user_question: str) -> str:
         pass
 
     sql_agent = get_sql_agent()
+    # agent가 도구 실행을 시도하더라도 최종 텍스트에서 SELECT만 추출
     result = sql_agent.invoke({"input": user_question})
+
     if isinstance(result, dict):
         text = result.get("output") or result.get("final_answer") or json.dumps(result, ensure_ascii=False)
     else:
         text = str(result)
 
-    sql = _strip_code_fences(text)
+    # 방탄 파서: 첫 SELECT 문만 추출 → 코드펜스/주석 제거 → 트리밍
+    sql = _extract_first_select(text)
 
-    if not re.match(r"(?is)^\\s*select\\s", sql):
-        raise ValueError("Only SELECT queries are allowed.")
-    banned = r"(?is)\\b(insert|update|delete|drop|alter|create|grant|revoke|truncate)\\b"
-    if re.search(banned, sql):
-        raise ValueError("Blocked SQL keyword detected.")
+    # 검증
+    _validate_sql_is_select(sql)
 
     try:
         st.markdown("OpenAI 응답 (SQL 생성)")
