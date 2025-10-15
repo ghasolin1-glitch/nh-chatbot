@@ -30,13 +30,11 @@ if not OPENAI_API_KEY:
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ====== LangChain용 DB/LLM/에이전트 초기화 ======
-# SQLAlchemy 연결문자열 (psycopg v3 드라이버) + sslmode=require
 SQLALCHEMY_URI = (
     f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     "?sslmode=require"
 )
 
-# 에이전트에게 “쿼리만 출력, 실행/설명 금지”를 못박는 프리픽스
 AGENT_PREFIX = """
 당신은 PostgreSQL SQL 전문가다. 다음 규칙을 반드시 지켜라.
 
@@ -62,10 +60,8 @@ ORDER BY date
 LIMIT 200;
 """.strip()
 
-# OpenAI Chat 모델 (LangChain용)
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
 
-# lazy 초기화: 앱 시작 시 즉시 접속하지 않음 (DNS/네트워크 이슈 회피)
 @st.cache_resource(show_spinner=False)
 def get_lc_db():
     return SQLDatabase.from_uri(SQLALCHEMY_URI)
@@ -81,9 +77,9 @@ def get_sql_agent():
     )
 
 # ----------------- 페이지/테마 -----------------
-st.set_page_config(page_title="보험사 경영공시 데이터 챗봇", page_icon="📊", layout="wide")
+st.set_page_config(page_title="보험사 경영공시 데이터 챗봇", page_icon="📊", layout="centered")
 
-# Pretendard + 글로벌 스타일 (Tailwind 느낌의 톤앤매너)
+# Pretendard + 글로벌 스타일 (모바일 최적화 + 입력창 시인성 강화)
 st.markdown("""
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 <link rel="stylesheet" as="style" crossorigin
@@ -105,6 +101,20 @@ html, body, [data-testid="stAppViewContainer"] {
 * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue',
      'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif !important; }
 
+/* 메인 컨테이너 폭 제한 + 모바일 패딩 */
+.block-container {
+  padding-top: 1.0rem;
+  padding-bottom: 1.5rem;
+  max-width: 860px;
+}
+@media (max-width: 640px) {
+  .block-container { 
+    padding-left: 0.8rem; 
+    padding-right: 0.8rem; 
+    max-width: 100%;
+  }
+}
+
 .container-card {
   background: var(--card);
   border-radius: 16px;
@@ -112,32 +122,37 @@ html, body, [data-testid="stAppViewContainer"] {
   border: 1px solid #eef2f7;
 }
 .header {
-  padding: 32px 32px 16px 32px;
+  padding: 24px 20px 12px 20px;
   border-bottom: 1px solid #eef2f7;
   text-align: center;
 }
 .header h1 {
   margin: 0; padding: 0;
-  font-size: 28px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+  font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
 }
 .header .byline {
   color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85;
 }
 .section {
-  padding: 24px 32px 28px 32px;
+  padding: 18px 20px 22px 20px;
 }
-.hint {
-  text-align:center; color:#475569; font-size: 16px; margin-bottom: 14px;
-}
+
+/* ===== 입력창: 화이트 배경 + 아주 옅은 라인 ===== */
 .input-like label { display:none!important; }
 .input-like .stTextInput>div>div>input {
-  height: 56px; font-size: 18px; padding: 0 18px;
-  background:#f3f4f6; border:1px solid #e5e7eb; border-radius:12px;
+  height: 52px; font-size: 17px; padding: 0 16px;
+  background:#ffffff;                 /* 화이트 배경 */
+  border:1px solid #e5e7eb;           /* 아주 옅은 라인 */
+  border-radius:12px;
 }
-.input-like .stTextInput>div>div>input:focus { outline: none; border-color: var(--ring); box-shadow: 0 0 0 3px rgba(147,197,253,.45); }
+.input-like .stTextInput>div>div>input:focus {
+  outline: none;
+  border-color: #dbeafe;              /* 살짝 파란빛 */
+  box-shadow: 0 0 0 3px rgba(147,197,253,.35);
+}
 
 .stButton>button {
-  width:100%; height:54px; font-weight:700; font-size:18px;
+  width:100%; height:52px; font-weight:700; font-size:17px;
   color:#fff; background: var(--blue);
   border-radius:12px; border:0;
   box-shadow: 0 2px 0 rgba(0,0,0,.03);
@@ -145,27 +160,26 @@ html, body, [data-testid="stAppViewContainer"] {
 .stButton>button:hover { background: var(--blue-dark); }
 .stButton>button:disabled { background:#d1d5db !important; color:#fff !important; }
 
-.kpi {
-  display:flex; gap:12px; align-items:center; justify-content:center; margin-top:8px;
-  color:#6b7280; font-size:14px;
-}
-.badge {
-  background:#eef2ff; color:#3730a3; padding:6px 10px; border-radius:999px; font-weight:600; font-size:12px;
-}
-
-.card-subtitle { color:#334155; font-size:18px; margin: 0 0 10px; text-align:center; }
+.card-subtitle { color:#334155; font-size:17px; margin: 0 0 10px; text-align:center; }
 
 .table-container .stDataFrame { border-radius:12px; overflow:hidden; border: 1px solid #e5e7eb; }
-hr.sep { border:none; border-top:1px solid #eef2f7; margin: 20px 0; }
+hr.sep { border:none; border-top:1px solid #eef2f7; margin: 18px 0; }
 
-.small-note { color:#64748b; font-size:13px; margin-top:4px;}
-.footer-note { color:#64748b; font-size:12px; text-align:center; margin-top:16px; }
+.small-note { color:#64748b; font-size:12px; margin-top:4px;}
+.footer-note { color:#64748b; font-size:12px; text-align:center; margin-top:12px; }
 
 .fadein { animation: fadeIn .5s ease; }
 @keyframes fadeIn { from{opacity:0; transform: translateY(6px)} to{opacity:1; transform:none} }
 
 /* code block polish */
 pre, code { font-size: 13px !important; }
+
+/* 모바일 타이포/간격 보정 */
+@media (max-width: 640px) {
+  .header h1 { font-size: 22px; }
+  .card-subtitle { font-size: 16px; }
+  .input-like .stTextInput>div>div>input { height: 50px; font-size: 16px; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -175,7 +189,7 @@ st.markdown("""
 <div class="header">
   <div style="display:flex; gap:10px; align-items:center; justify-content:center;">
     <h1>보험사 경영공시 데이터 <span style="color:var(--text)">챗봇</span></h1>
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"
+    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
          fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 8V4H8V8H12Z" />
       <path d="M16 8V4H12V8H16Z" />
@@ -192,39 +206,24 @@ st.markdown("""
     </svg>
   </div>
   <div class="byline">made by 태훈 · 정형 데이터(SQL) 전용</div>
-  <div class="kpi">
-    <span class="badge">DB 연결</span>
-    <span>Host: <b>{host}</b></span>
-    <span>·</span>
-    <span>User: <b>{user}</b></span>
-  </div>
 </div>
-""".format(host=DB_HOST or "-", user=DB_USER or "-"), unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 st.markdown('<div class="section">', unsafe_allow_html=True)
-st.markdown('<p class="hint">현재 보유데이터는 2022~2024년 가정변경효과 · K-ICS 비율</p>', unsafe_allow_html=True)
-
-# ----------------- 사이드바 (상태 영역) -----------------
-with st.sidebar:
-    st.markdown("### 연결 상태")
-    st.write(f"DB Host: {DB_HOST}")
-    st.write(f"DB User: {DB_USER}")
-    st.caption("좌측 버튼 흐름대로 진행하세요. (① SQL 생성 → ② 실행 → ③ 차트/요약)")
+# 👉 “현재 보유데이터는 …” 안내문 제거 (요청사항)
+# st.markdown('<p class="hint">현재 보유데이터는 2022~2024년 가정변경효과 · K-ICS 비율</p>', unsafe_allow_html=True)
 
 # ----------------- SQL 생성 (LangChain Agent) -----------------
 def _strip_code_fences(text: str) -> str:
     """```sql ...``` 같은 펜스를 제거"""
     t = text.strip()
     if t.startswith("```"):
-        t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
-        t = re.sub(r"\s*```$", "", t)
+        t = re.sub(r"^```[a-zA-Z]*\\s*", "", t)
+        t = re.sub(r"\\s*```$", "", t)
     return t.strip()
 
 def generate_sql(user_question: str) -> str:
-    """
-    LangChain create_sql_agent를 사용해 '실행하지 않고' SQL만 생성.
-    """
-    # 프롬프트/입력 디버그
+    """LangChain create_sql_agent를 사용해 '실행하지 않고' SQL만 생성."""
     try:
         st.markdown("OpenAI 프롬프트 (SQL 생성; LangChain Agent prefix)")
         st.code(AGENT_PREFIX, language="markdown")
@@ -233,7 +232,7 @@ def generate_sql(user_question: str) -> str:
     except Exception:
         pass
 
-    sql_agent = get_sql_agent()  # lazy 생성/접속
+    sql_agent = get_sql_agent()
     result = sql_agent.invoke({"input": user_question})
     if isinstance(result, dict):
         text = result.get("output") or result.get("final_answer") or json.dumps(result, ensure_ascii=False)
@@ -242,14 +241,12 @@ def generate_sql(user_question: str) -> str:
 
     sql = _strip_code_fences(text)
 
-    # 안전검증: SELECT 전용 + 금지어 차단
-    if not re.match(r"(?is)^\s*select\s", sql):
+    if not re.match(r"(?is)^\\s*select\\s", sql):
         raise ValueError("Only SELECT queries are allowed.")
-    banned = r"(?is)\b(insert|update|delete|drop|alter|create|grant|revoke|truncate)\b"
+    banned = r"(?is)\\b(insert|update|delete|drop|alter|create|grant|revoke|truncate)\\b"
     if re.search(banned, sql):
         raise ValueError("Blocked SQL keyword detected.")
 
-    # 응답 디버그
     try:
         st.markdown("OpenAI 응답 (SQL 생성)")
         st.code(sql, language="sql")
@@ -259,7 +256,6 @@ def generate_sql(user_question: str) -> str:
     return sql
 
 def run_sql(sql: str) -> pd.DataFrame:
-    # psycopg 연결에도 sslmode=require 적용
     with psycopg.connect(
         host=DB_HOST,
         dbname=DB_NAME,
@@ -348,39 +344,11 @@ if run_btn:
             except Exception as e:
                 st.error(f"DB 실행 오류: {e}")
 
-# ----------------- 차트 & 요약 -----------------
-st.markdown('<div class="container-card section fadein">', unsafe_allow_html=True)
-st.markdown('<p class="card-subtitle">③ 차트 & 요약</p>', unsafe_allow_html=True)
-
 df_prev = st.session_state.get("df")
 if df_prev is not None and not df_prev.empty:
-    # 날짜 컬럼 이름 추정
-    date_col = None
-    for c in df_prev.columns:
-        if str(c).lower() == "date":
-            date_col = c
-            break
-    if date_col:
-        try:
-            df_plot = df_prev.copy()
-            df_plot[date_col] = pd.to_datetime(df_plot[date_col], errors="coerce")
-            df_plot = df_plot.dropna(subset=[date_col])
-            # value/metric 열 힌트
-            y_col = None
-            for cand in ["value", "amount", "val"]:
-                if cand in df_plot.columns:
-                    y_col = cand
-                    break
-            if y_col:
-                st.line_chart(df_plot.set_index(date_col)[y_col])
-        except Exception:
-            pass
-
-    col_a, col_b = st.columns([1,1])
+    col_a, _ = st.columns([1,1])
     with col_a:
         gen_sum = st.button("요약 생성", use_container_width=True)
-    with col_b:
-        st.caption("차트 영역은 time-series일 때 자동 표시됩니다.")
 
     if gen_sum:
         with st.spinner("요약 생성 중..."):
@@ -390,9 +358,7 @@ if df_prev is not None and not df_prev.empty:
             except Exception as e:
                 st.error(f"요약 오류: {e}")
 else:
-    st.caption("실행 결과가 표시되면 차트와 요약을 볼 수 있습니다.")
+    st.caption("실행 결과가 표시되면 요약을 볼 수 있습니다.")
 
 st.markdown('</div>', unsafe_allow_html=True)  # container-card
 st.markdown('</div>', unsafe_allow_html=True)  # 상단 container-card 종료
-
-st.markdown('<p class="footer-note">UI만 변경 · 기능 로직은 원본과 동일합니다.</p>', unsafe_allow_html=True)
