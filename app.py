@@ -48,6 +48,8 @@ AGENT_PREFIX = """
 - 회사명/약칭/별칭 등은 사용자가 한국어로 적더라도 스스로 합리적 company_code를 추론한다. (모호하면 LIMIT 300으로 시작)
 - SELECT * 대신 필요한 컬럼만 선택하고, where 절에 기간/회사/지표 필터를 상식적으로 건다.
 - 첫 토큰은 반드시 SELECT, CTE/WITH/EXPLAIN 금지. 세미콜론은 최대 1개만 허용.
+- 사용자가 'YYYY년 MM월'또는 '2024.12' 또는 'YY년 MM월'을 입력하면 반드시 'closing_ym = YYYYMM'으로 변환한다.
+- 최근 연말로 추정하거나 자동 보정하지 않는다.
 """.strip()
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
@@ -262,7 +264,7 @@ def run_sql(sql: str) -> pd.DataFrame:
         return pd.read_sql_query(sql, conn)
 
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
-    preview_csv = df.head(20).to_csv(index=False)
+    preview_csv = df.to_csv(index=False)
     prompt = f"""질문: {q}
 아래 CSV 일부를 참고해서 3문장 이내로 한국어 요약을 써줘. 단위와 기간을 분명히 써.
 CSV 미리보기(최대 20행):
