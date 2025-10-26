@@ -9,7 +9,6 @@ import psycopg
 # ====== LangChain / OpenAI LLM ======
 from langchain_community.utilities import SQLDatabase
 
-# create_sql_agent 경로 버전별 대응
 try:
     from langchain_community.agent_toolkits import create_sql_agent
 except ImportError:
@@ -28,7 +27,7 @@ load_dotenv()
 
 # ----------------- 환경변수/시크릿 -----------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
-DB_HOST = os.getenv("DB_HOST") or st.secrets.get("DB_HOST")        # e.g., aws-1-us-east-1.pooler.supabase.com
+DB_HOST = os.getenv("DB_HOST") or st.secrets.get("DB_HOST")
 DB_NAME = os.getenv("DB_NAME") or st.secrets.get("DB_NAME", "postgres")
 DB_USER = os.getenv("DB_USER") or st.secrets.get("DB_USER", "readonly")
 DB_PASS = os.getenv("DB_PASS") or st.secrets.get("DB_PASS")
@@ -40,7 +39,7 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# ====== LangChain용 DB/LLM/에이전트 초기화 ======
+# ================== LangChain Agent ==================
 SQLALCHEMY_URI = (
     f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     "?sslmode=require"
@@ -61,7 +60,7 @@ AGENT_PREFIX = """
 - 사용자가 'YYYY년 MM월'또는 '2024.12' 또는 'YY년 MM월'을 입력하면 반드시 'closing_ym = YYYYMM'으로 변환한다.
 - 최근 연말로 추정하거나 자동 보정하지 않는다.
 - 회사명은 "미래에셋생명,흥국화재,한화생명,한화손해,iM라이프생명,흥국생명,메리츠화재,KB생명,신한생명,DB생명,하나생명,BNP생명,푸본현대생명,ABL생명,DB손해,동양생명,농협생명,삼성화재,교보라이프플래닛생명,메트라이프생명,처브라이프생명보험,AIA생명,현대해상,교보생명,롯데손해,KDB생명,라이나생명,IBK생명,코리안리,KB손해,삼성생명,농협손보"로 DB에 저장되어있다.
-""".strip()
+"""
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
 
@@ -78,7 +77,7 @@ def get_sql_agent():
         prefix=AGENT_PREFIX,
     )
 
-# ----------------- 유틸: 출력 정리/검증 -----------------
+# ----------------- 유틸 함수 -----------------
 def _strip_code_fences(text: str) -> str:
     t = text.strip()
     t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
@@ -102,22 +101,18 @@ def _extract_first_select(text: str) -> str:
 
 def _validate_sql_is_select(sql: str):
     if sql.count(";") > 1:
-        raise ValueError("Multiple statements are not allowed.")
+        raise ValueError("Multiple statements not allowed.")
     if not re.match(r"(?is)^\s*select\b", sql):
-        raise ValueError("Only SELECT queries are allowed.")
+        raise ValueError("Only SELECT allowed.")
     banned = r"(?is)\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|into|explain|with)\b"
     if re.search(banned, sql):
         raise ValueError("Blocked SQL keyword detected.")
 
-# ----------------- 페이지/테마 -----------------
+# ----------------- 페이지 설정 -----------------
 st.set_page_config(page_title="보험사 경영공시 챗봇", page_icon="📊", layout="centered")
 
-# Pretendard + 글로벌 스타일 (모바일 타이틀 1줄 고정 포함)
+# ----------------- CSS Theme -----------------
 st.markdown("""
-<link rel="preconnect" href="https://cdn.jsdelivr.net" />
-<link rel="stylesheet" as="style" crossorigin
-      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-
 <style>
 :root {
   --blue:#0064FF;
@@ -126,306 +121,162 @@ st.markdown("""
   --text:#0f172a;
   --muted:#64748b;
   --card:#ffffff;
-  --ring:#93c5fd;
 }
 
 html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !important; }
-* { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue',
-      'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif !important; }
+* { font-family: 'Pretendard', sans-serif !important; }
 
-.block-container { padding-top: 1.0rem; padding-bottom: 1.5rem; max-width: 860px; }
-@media (max-width: 640px) { .block-container { padding-left: 0.8rem; padding-right: 0.8rem; max-width: 100%; } }
+.block-container { padding-top: 1.0rem; max-width: 860px; }
 
-.container-card {
-  background: var(--card);
-  border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(2, 6, 23, 0.06);
-  border: 1px solid #eef2f7;
-}
-
-/* ====== 헤더/타이틀 - 모바일 한 줄 고정 ====== */
-.header {
-  padding: 39px 20px 12px 20px;
-  border-bottom: 1px solid #eef2f7;
-  text-align: center;
-}
-.title-row {
-  display: flex; align-items: center; justify-content: center;
-  gap: 2px; /* ✅ 1번: 간격을 2px로 좁혀 거의 붙도록 수정 */
-  flex-wrap: nowrap; max-width: 100%;
-}
+/* HEADER */
+.header { padding: 39px 20px 12px; text-align:center; }
+.title-row { display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:nowrap; }
 .header h1 {
-  margin: 0; padding: 0;
-  font-size: clamp(22px, 5.5vw, 36px);
-  font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+  margin: 0;
+  font-size: clamp(24px, 6vw, 38px);
+  font-weight: 900;
+  color: var(--text);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
 }
-.header svg { 
-  flex-shrink: 0; 
-  width: 34px; height: 34px; /* ✅ 2번: CSS에서도 크기 30% 증가 */
+.header .icon svg {
+  width: 40px;
+  height: 40px;
+  fill: #0064FF; /* ✅ 파란 실루엣 스타일 */
+  pointer-events:none;
 }
-.header .byline { color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85; }
+.byline { color: #6b7280; font-size:13px; }
 
-/* ====== 섹션 ====== */
-.section { padding: 18px 20px 22px 20px; }
-
-/* ====== 입력창 강조: 파란빛 글로우 + 반짝효과 (pill) ====== */
-.input-like label { display:none!important; }
-.input-like .stTextInput>div>div>input {
-  height: 56px; font-size: 17px; padding: 0 20px;
-  background:#ffffff; border:1px solid #0064FF;
-  border-radius: 9999px;
+/* Input Glow */
+.input-like .stTextInput input {
+  height: 56px;
+  border-radius:999px;
+  border:1px solid var(--blue);
   box-shadow:
-    0 0 15px rgba(0, 100, 255, 0.5), 
-    0 0 30px rgba(0, 100, 255, 0.3), 
-    0 0 45px rgba(0, 100, 255, 0.2); 
-  animation: glowPulse 2.2s infinite ease-in-out;
-}
-.input-like .stTextInput>div>div>input:focus {
-  outline: none;
-  border-color: #4f9cff;
-  box-shadow:
-    0 0 18px rgba(0, 100, 255, 0.8), 
-    0 0 36px rgba(0, 100, 255, 0.5), 
-    0 0 48px rgba(0, 100, 255, 0.4); 
-  animation: glowPulseFast 1.4s infinite ease-in-out;
+    0 0 18px rgba(0,100,255,.55),
+    0 0 30px rgba(0,100,255,.35);
+  animation: glowPulse 2s infinite ease-in-out;
 }
 @keyframes glowPulse {
-  0%, 100% {
-    box-shadow:
-      0 0 15px rgba(0, 100, 255, 0.35), 
-      0 0 25px rgba(0, 100, 255, 0.20), 
-      0 0 35px rgba(0, 100, 255, 0.10); 
-  }
   50% {
     box-shadow:
-      0 0 20px rgba(0, 100, 255, 0.55), 
-      0 0 35px rgba(0, 100, 255, 0.35), 
-      0 0 40px rgba(0, 100, 255, 0.28); 
-  }
-}
-@keyframes glowPulseFast {
-  0%, 100% {
-    box-shadow:
-      0 0 18px rgba(0, 100, 255, 0.55), 
-      0 0 28px rgba(0, 100, 255, 0.35), 
-      0 0 34px rgba(0, 100, 255, 0.25); 
-  }
-  50% {
-    box-shadow:
-      0 0 24px rgba(0, 100, 255, 0.85), 
-      0 0 40px rgba(0, 100, 255, 0.55), 
-      0 0 46px rgba(0, 100, 255, 0.40); 
+      0 0 28px rgba(0,100,255,.85),
+      0 0 45px rgba(0,100,255,.45);
   }
 }
 
-/* 버튼 */
+/* Buttons */
 .stButton>button {
-  width:100%; height:48px; font-weight:700; font-size:16px;
-  color:#fff; background: var(--blue);
-  border-radius:12px; border:0; box-shadow: 0 2px 0 rgba(0,0,0,.03);
+  height:48px; font-weight:700; font-size:16px;
+  color:#fff; background:var(--blue);
+  border-radius:12px; border:0;
 }
-.stButton>button:hover { background: var(--blue-dark); }
-.stButton>button:disabled { background:#d1d5db !important; color:#fff !important; }
+.stButton>button:hover { background:var(--blue-dark); }
 
-/* 카드/표 등 */
-.card-subtitle { color:#334155; font-size:17px; margin: 0 0 10px; text-align:center; }
-.table-container .stDataFrame { border-radius:12px; overflow:hidden; border: 1px solid #e5e7eb; }
-hr.sep { border:none; border-top:1px solid #eef2f7; margin: 18px 0; }
-.small-note { color:#64748b; font-size:12px; margin-top:4px;}
-.footer-note { color:#64748b; font-size:12px; text-align:center; margin-top:12px; }
-
-.fadein { animation: fadeIn .5s ease; }
-@keyframes fadeIn { from{opacity:0; transform: translateY(6px)} to{opacity:1; transform:none} }
-
-pre, code { font-size: 13px !important; }
-
-@media (max-width: 640px) {
-  .card-subtitle { font-size: 16px; }
-  .input-like .stTextInput>div>div>input { height: 54px; font-size: 16px; }
-}
+/* Results */
+.table-container .stDataFrame { border:1px solid #e5e7eb; border-radius:8px; }
+.fadein { animation:fadeIn .4s ease; }
+@keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- 헤더 -----------------
-st.markdown('<div class="container-card fadein">', unsafe_allow_html=True)
+# ----------------- Header -----------------
 st.markdown("""
 <div class="header">
   <div class="title-row">
     <h1>보험사 경영공시 챗봇</h1>
-    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24"
-          fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M12 8V4H8V8H12Z" />
-      <path d="M16 8V4H12V8H16Z" />
-      <path d="M12 14V12H8V14H12Z" />
-      <path d="M16 14V12H12V14H16Z" />
-      <path d="M6 18H18V16H6V18Z" />
-      <path d="M6 12H4V10H6V12Z" />
-      <path d="M20 12H18V10H20V12Z" />
-      <path d="M6 8H4V6H6V8Z" />
-      <path d="M20 8H18V6H20V8Z" />
-      <path d="M10 22H14V20H10V22Z" />
-      <path d="M4 4H2V2H4V4Z" />
-      <path d="M22 4H20V2H22V4Z" />
-    </svg>
+    <span class="icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+          aria-hidden="true">
+        <path d="M12 8V4H8V8H12Z" />
+        <path d="M16 8V4H12V8H16Z" />
+        <path d="M12 14V12H8V14H12Z" />
+        <path d="M16 14V12H12V14H16Z" />
+        <path d="M6 18H18V16H6V18Z" />
+        <path d="M6 12H4V10H6V12Z" />
+        <path d="M20 12H18V10H20V12Z" />
+        <path d="M6 8H4V6H6V8Z" />
+        <path d="M20 8H18V6H20V8Z" />
+        <path d="M10 22H14V20H10V22Z" />
+        <path d="M4 4H2V2H4V4Z" />
+        <path d="M22 4H20V2H22V4Z" />
+      </svg>
+    </span>
   </div>
   <div class="byline">made by 태훈 · 현철</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ===== 실행 결과가 들어갈 상단 슬롯 (타이틀과 프롬프트 사이) =====
-result_area = st.container()    # <- 여기에 실행 결과를 그린다.
+result_area = st.container()
 
-# ===================== 입력 섹션 =====================
-st.markdown('<div class="section">', unsafe_allow_html=True)
+# ===================== INPUT =====================
+st.markdown('<div class="input-like">', unsafe_allow_html=True)
+q = st.text_input(
+    label="질문",
+    placeholder="예) 2023년 NH농협생명 매출 월별 추이 보여줘",
+    label_visibility="collapsed"
+)
+st.markdown('</div>', unsafe_allow_html=True)
 
-# ----------------- SQL 생성 (LangChain Agent) -----------------
-def generate_sql(user_question: str) -> str:
-    try:
-        with st.expander("OpenAI 프롬프트 (SQL 생성; LangChain Agent prefix)", expanded=False):
-            st.code(AGENT_PREFIX, language="markdown")
-        st.caption("User 입력")
-        st.code(user_question)
-    except Exception:
-        pass
+c1, c2, c3 = st.columns([1,2,1])
+with c2:
+    go_btn = st.button("실행", use_container_width=True)
 
-    sql_agent = get_sql_agent()
-    result = sql_agent.invoke({"input": user_question})
-
-    if isinstance(result, dict):
-        text = result.get("output") or result.get("final_answer") or json.dumps(result, ensure_ascii=False)
-    else:
-        text = str(result)
-
+# SQL 생성 + 실행
+def generate_sql(user_q):
+    agent = get_sql_agent()
+    result = agent.invoke({"input": user_q})
+    text = result.get("output") or result.get("final_answer")
     sql = _extract_first_select(text)
     _validate_sql_is_select(sql)
-
-    try:
-        st.caption("OpenAI 응답 (SQL 생성)")
-        st.code(sql, language="sql")
-    except Exception:
-        pass
-
     return sql
 
-def run_sql(sql: str) -> pd.DataFrame:
+def run_sql(sql):
     with psycopg.connect(
         host=DB_HOST,
         dbname=DB_NAME,
         user=DB_USER,
         password=DB_PASS,
         port=DB_PORT,
-        sslmode="require",
+        sslmode="require"
     ) as conn:
         return pd.read_sql_query(sql, conn)
 
-# ✅ 2번 수정: 함수 내의 불필요한 st.code(summary_text) 제거
-def summarize_answer(q: str, df: pd.DataFrame) -> str:
-    preview_csv = df.head(20).to_csv(index=False)
+def summarize_answer(q, df):
+    preview = df.head(20).to_csv(index=False)
     prompt = f"""질문: {q}
-아래 CSV 일부를 참고해서 3문장 이내로 한국어 요약을 써줘. 단위와 기간을 분명히 써.
-CSV 미리보기(최대 20행):
-{preview_csv}
-"""
-    try:
-        with st.expander("OpenAI 프롬프트 (요약)", expanded=False):
-            st.code(prompt, language="markdown")
-    except Exception:
-        pass
-
+아래 CSV 일부 참고하여 한국어로 3문장 이내 요약:
+{preview}"""
     r = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role":"user","content": prompt}],
+        messages=[{"role":"user","content":prompt}],
         temperature=0.2
     )
-    summary_text = r.choices[0].message.content.strip()
-    
-    # st.code(summary_text) <- 이 부분이 스크린샷의 회색 상자를 만들었으므로 삭제.
-    
-    return summary_text
+    return r.choices[0].message.content.strip()
 
-# ----------------- 입력창 -----------------
-st.markdown('<div class="input-like">', unsafe_allow_html=True)
-q = st.text_input(
-    label="질문",
-    placeholder="예) 2023년 NH농협생명 매출 월별 추이 보여줘",
-    label_visibility="collapsed",
-    key="q_input"
-)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ----------------- 버튼: 절반 너비(가운데) + 원클릭 실행 -----------------
-c1, c2, c3 = st.columns([1, 2, 1])    # 가운데 컬럼만 버튼 -> 전체 대비 50% 폭
-with c2:
-    go_btn = st.button("실행", use_container_width=True)
-
-# 클릭 시: 결과는 상단 result_area에 그리기
+# Execute
 if go_btn:
     if not q:
         with result_area:
             st.warning("질문을 입력하세요.")
     else:
-        # 1) SQL 생성
         try:
             sql = generate_sql(q)
-            st.session_state["sql"] = sql
-        except Exception as e:
-            with result_area:
-                st.error(f"SQL 생성 오류: {e}")
-            st.stop()
-
-        # 2) 즉시 실행 + 상단 결과 슬롯에 렌더링
-        try:
-            df = run_sql(st.session_state["sql"])
+            df = run_sql(sql)
             st.session_state["df"] = df
             with result_area:
-                st.markdown('<div class="section">', unsafe_allow_html=True)
-                st.markdown('#### 실행 결과')
+                st.markdown("#### ✅ 실행 결과")
                 if df.empty:
                     st.info("결과가 없습니다.")
                 else:
                     st.markdown('<div class="table-container">', unsafe_allow_html=True)
                     st.dataframe(df, use_container_width=True)
                     st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+
+            if not df.empty:
+                with result_area:
+                    summary = summarize_answer(q, df)
+                    st.success(summary)
         except Exception as e:
             with result_area:
-                st.error(f"DB 실행 오류: {e}")
-            st.stop()
+                st.error(f"오류 발생: {e}")
 
-        # 3) 자동 요약 생성 (있을 때만)
-        df_prev = st.session_state.get("df")
-        if df_prev is not None and not df_prev.empty:
-            try:
-                with result_area:
-                    with st.spinner("요약 생성 중..."):
-                        summary = summarize_answer(q, df_prev)
-                        # ✅ 2번 수정: 이제 st.success로만 요약이 표시됨
-                        st.success(summary)
-                        st.session_state["summary"] = summary
-            except Exception as e:
-                with result_area:
-                    st.error(f"요약 오류: {e}")
-
-st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
-
-# 필요 시 요약 버튼(재생성 용도)
-df_prev = st.session_state.get("df")
-if df_prev is not None and not df_prev.empty:
-    if st.button("요약 생성", use_container_width=True):
-        with result_area:
-            with st.spinner("요약 생성 중..."):
-                try:
-                    summary = summarize_answer(q, df_prev)
-                    st.success(summary)
-                    st.session_state["summary"] = summary
-                except Exception as e:
-                    st.error(f"요약 오류: {e}")
-else:
-    st.caption("실행 결과가 표시되면 요약을 볼 수 있습니다.")
-
-st.markdown('</div>', unsafe_allow_html=True)  # section 종료
-st.markdown('</div>', unsafe_allow_html=True)  # container-card 종료
