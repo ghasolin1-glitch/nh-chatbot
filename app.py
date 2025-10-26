@@ -1,3 +1,4 @@
+# 2025102
 # app.py — 보험사 경영공시 챗봇 (아이콘/버튼너비 수정)
 import os
 import json
