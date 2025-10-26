@@ -160,7 +160,7 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 }
 .header h1 {
   margin: 0; padding: 0;
-  font-size: clamp(22px, 5.5vw, 36px);
+  font-size: clamp(25px, 7vw, 48px);
   font-weight: 800; letter-spacing: -0.02em; color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -325,7 +325,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # ----------------- 버튼: 60% 너비(가운데) + 원클릭 실행 -----------------
 # ✅ 2. (수정) 컬럼 비율을 [1, 3, 1]로 변경 (중앙 3/5 = 60%)
-c1, c2, c3 = st.columns([1, 3, 1])   # 가운데 컬럼만 버튼 -> 전체 대비 60% 폭
+c1, c2, c3 = st.columns([1, 1.5, 1])   # 가운데 컬럼만 버튼 -> 전체 대비 60% 폭
 with c2:
     go_btn = st.button("실행", use_container_width=True)
 
