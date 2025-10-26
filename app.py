@@ -1,4 +1,4 @@
-# app.py — 보험사 경영공시 챗봇 (SQL 생성+실행 One-Click, 결과 상단 슬롯, 파란 글로우 입력창, 모바일 타이틀 1줄 고정)
+# app.py — 보험사 경영공시 챗봇 (기능 원복 + CSS 안정화)
 import os
 import json
 import re
@@ -47,19 +47,17 @@ SQLALCHEMY_URI = (
 
 AGENT_PREFIX = """
 당신은 PostgreSQL SQL 전문가다. 다음 규칙을 반드시 지켜라.
-- 오직 'SELECT'만 작성한다. (INSERT/UPDATE/DELETE/ALTER/DROP/CREATE/GRANT/REVOKE/TRUNCATE 금지)
-- 결과는 SQL만 내보낸다. 백틱/설명/자연어/코드블록/주석 없이 SQL 한 문장만 출력한다.
-- 대상 테이블: kics_solvency_data_flexible
-- 시계열을 조회할 때는 항상 ORDER BY date를 포함한다.
-- 한국어 질의의 의미를 스스로 판단해 컬럼/값을 매핑한다.
-- SELECT * 대신 필요한 컬럼만 선택한다.
+- 오직 'SELECT'만 작성한다.
+- 결과는 SQL만 내보낸다.
+- 테이블: kics_solvency_data_flexible
 """
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 @st.cache_resource(show_spinner=False)
 def get_lc_db():
     return SQLDatabase.from_uri(SQLALCHEMY_URI)
+
 
 def get_sql_agent():
     return create_sql_agent(
@@ -70,18 +68,44 @@ def get_sql_agent():
         prefix=AGENT_PREFIX,
     )
 
+# ============== ✅ 유틸 함수 복원 =====================
+def _strip_code_fences(text: str) -> str:
+    t = text.strip()
+    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
+    t = re.sub(r"\s*```$", "", t)
+    return t.strip()
+
+def _remove_sql_comments(sql: str) -> str:
+    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.S)
+    sql = re.sub(r"^\s*--.*?$", "", sql, flags=re.M)
+    return sql.strip()
+
+def _extract_first_select(text: str) -> str:
+    cleaned = _remove_sql_comments(_strip_code_fences(text))
+    m = re.search(r"(?is)\bselect\b", cleaned)
+    if not m:
+        return cleaned.strip()
+    start = m.start()
+    tail = cleaned[start:]
+    semi = re.search(r";", tail)
+    return (tail[:semi.start()] if semi else tail).strip()
+
+def _validate_sql_is_select(sql: str):
+    if sql.count(";") > 1:
+        raise ValueError("Multiple statements not allowed.")
+    if not re.match(r"(?is)^\s*select\b", sql):
+        raise ValueError("Only SELECT allowed.")
+
 # ======================================================
-# ---------------------- CSS FIX -----------------------
-# ======================================================
+
+st.set_page_config(page_title="보험사 경영공시 챗봇", page_icon="📊", layout="centered")
+
+# ✅ CSS 안정화 + Glow 적용
 st.markdown("""
 <style>
 :root {
   --blue:#0064FF;
-  --blue-dark:#0050CC;
   --bg:#F0F1F3;
-  --text:#0f172a;
-  --muted:#64748b;
-  --card:#ffffff;
 }
 
 html, body, [data-testid="stAppViewContainer"] {
@@ -90,143 +114,112 @@ html, body, [data-testid="stAppViewContainer"] {
 
 * { font-family: 'Pretendard', sans-serif !important; }
 
-.block-container { padding-top: 1.0rem !important; max-width: 860px !important; }
+.header { padding: 32px 10px 12px; text-align:center; }
+.title-row { display:flex; align-items:center; justify-content:center; gap:6px; }
+.header h1 { font-size: clamp(24px, 6vw, 38px); font-weight: 900; }
 
-/* HEADER */
-.header { padding: 39px 20px 12px !important; text-align:center !important; }
-.title-row { display:flex !important; align-items:center !important; justify-content:center !important; gap:4px !important; flex-wrap:nowrap !important; }
-.header h1 {
-  margin: 0 !important;
-  font-size: clamp(24px, 6vw, 38px) !important;
-  font-weight: 900 !important;
-  color: var(--text) !important;
-  white-space: nowrap !important;
-}
 .header .icon svg {
-  width: 40px !important;
-  height: 40px !important;
+  width: 38px;
+  height: 38px;
   fill: var(--blue) !important;
-  pointer-events:none !important;
-  margin:0 !important;
-  padding:0 !important;
 }
-.byline { color: #6b7280 !important; font-size:13px !important; }
 
-/* ✅ Input Glow — 안정적 셀렉터 + 우선순위 극대화 */
-.input-like [data-testid="stTextInput"] input {
-  height: 56px !important;
-  border-radius: 999px !important;
-  border: 1px solid var(--blue) !important;
-  box-shadow:
-    0 0 18px rgba(0,100,255,.55),
-    0 0 30px rgba(0,100,255,.35) !important;
-  animation: glowPulse 2s infinite ease-in-out !important;
-  background-color: #ffffff !important;
+/* ✅ Glow를 Shadow DOM 밖 wrapper에 적용 */
+.input-like div[data-testid="stTextInput"] {
+  background:white !important;
+  border-radius:999px !important;
+  border:1px solid var(--blue) !important;
+  padding:6px 12px !important;
+  box-shadow:0 0 20px rgba(0,100,255,.55),
+             0 0 40px rgba(0,100,255,.35) !important;
+  animation:glowPulse 2s infinite ease-in-out !important;
 }
+
 @keyframes glowPulse {
   50% {
-    box-shadow:
-      0 0 28px rgba(0,100,255,.85),
-      0 0 45px rgba(0,100,255,.45) !important;
+    box-shadow:0 0 30px rgba(0,100,255,.85),
+               0 0 50px rgba(0,100,255,.45) !important;
   }
 }
 
-/* Buttons */
-.stButton>button {
-  height:48px !important; font-weight:700 !important; font-size:16px !important;
-  color:#fff !important; background:var(--blue) !important;
-  border-radius:12px !important; border:0 !important;
+input {
+  background:transparent !important;
+  border:none !important;
+  box-shadow:none !important;
 }
-.stButton>button:hover { background:var(--blue-dark) !important; }
 
-/* Results */
-.table-container .stDataFrame { border:1px solid #e5e7eb !important; border-radius:8px !important; }
-.fadein { animation:fadeIn .4s ease !important; }
-@keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- Header -----------------
+# ======================================================
+# Header UI
+# ======================================================
 st.markdown("""
 <div class="header">
   <div class="title-row">
     <h1>보험사 경영공시 챗봇</h1>
     <span class="icon">
-      ✅ SVG 그대로 유지…
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M12 8V4H8V8H12Z" />
+        <path d="M16 8V4H12V8H16Z" />
+        <path d="M12 14V12H8V14H12Z" />
+        <path d="M16 14V12H12V14H16Z" />
+        <path d="M6 18H18V16H6V18Z" />
+        <path d="M6 12H4V10H6V12Z" />
+        <path d="M20 12H18V10H20V12Z" />
+        <path d="M6 8H4V6H6V8Z" />
+        <path d="M20 8H18V6H20V8Z" />
+        <path d="M10 22H14V20H10V22Z" />
+        <path d="M4 4H2V2H4V4Z" />
+        <path d="M22 4H20V2H22V4Z" />
+      </svg>
     </span>
   </div>
-  <div class="byline">made by 태훈 · 현철</div>
+  <div style="color:#6b7280;font-size:13px;">made by 태훈 · 현철</div>
 </div>
 """, unsafe_allow_html=True)
 
 result_area = st.container()
 
-# ===================== INPUT =====================
+# ============== INPUT ==============
 st.markdown('<div class="input-like">', unsafe_allow_html=True)
-q = st.text_input(
-    label="질문",
-    placeholder="예) 2023년 NH농협생명 매출 월별 추이 보여줘",
-    label_visibility="collapsed"
-)
+q = st.text_input("질문", placeholder="예) 2023년 NH농협생명 자산 증가율 알려줘", label_visibility="collapsed")
 st.markdown('</div>', unsafe_allow_html=True)
 
-c1, c2, c3 = st.columns([1,2,1])
-with c2:
-    go_btn = st.button("실행", use_container_width=True)
-
-def generate_sql(user_q):
-    agent = get_sql_agent()
-    result = agent.invoke({"input": user_q})
-    text = result.get("output") or result.get("final_answer")
-    sql = _extract_first_select(text)
-    _validate_sql_is_select(sql)
-    return sql
-
-def run_sql(sql):
-    with psycopg.connect(
-        host=DB_HOST,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASS,
-        port=DB_PORT,
-        sslmode="require"
-    ) as conn:
-        return pd.read_sql_query(sql, conn)
-
-def summarize_answer(q, df):
-    preview = df.head(20).to_csv(index=False)
-    prompt = f"""질문: {q}
-아래 CSV 일부 참고하여 한국어로 3문장 이내 요약:
-{preview}"""
-    r = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role":"user","content":prompt}],
-        temperature=0.2
-    )
-    return r.choices[0].message.content.strip()
-
-if go_btn:
+if st.button("실행", use_container_width=True):
     if not q:
         with result_area:
             st.warning("질문을 입력하세요.")
     else:
         try:
-            sql = generate_sql(q)
-            df = run_sql(sql)
-            st.session_state["df"] = df
-            with result_area:
-                st.markdown("#### ✅ 실행 결과")
-                if df.empty:
-                    st.info("결과가 없습니다.")
-                else:
-                    st.markdown('<div class="table-container">', unsafe_allow_html=True)
-                    st.dataframe(df, use_container_width=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+            agent = get_sql_agent()
+            result = agent.invoke({"input": q})
+            text = result.get("output") or result.get("final_answer")
+            sql = _extract_first_select(text)
+            _validate_sql_is_select(sql)
 
-            if not df.empty:
-                with result_area:
-                    summary = summarize_answer(q, df)
-                    st.success(summary)
+            df = pd.read_sql_query(sql,
+                psycopg.connect(
+                    host=DB_HOST, dbname=DB_NAME,
+                    user=DB_USER, password=DB_PASS,
+                    port=DB_PORT, sslmode="require"
+                )
+            )
+
+            with result_area:
+                st.write("✅ 실행 결과")
+                st.dataframe(df, use_container_width=True)
+
+                if not df.empty:
+                    preview = df.head(20).to_csv(index=False)
+                    prompt = f"한국어로 3문장 요약:\n{preview}"
+                    r = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role":"user","content":prompt}],
+                        temperature=0
+                    )
+                    st.success(r.choices[0].message.content.strip())
+
         except Exception as e:
             with result_area:
                 st.error(f"오류 발생: {e}")
