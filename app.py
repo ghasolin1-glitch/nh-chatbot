@@ -1,4 +1,4 @@
-# app.py — 보험사 경영공시 데이터 챗봇 (SQL 생성+실행 One-Click, 모바일 타이틀 1줄 고정)
+# app.py — 보험사 경영공시 챗봇 (SQL 생성+실행 One-Click, 결과 상단 슬롯, 모바일 타이틀 1줄 고정)
 import os
 import json
 import re
@@ -80,23 +80,17 @@ def get_sql_agent():
 
 # ----------------- 유틸: 출력 정리/검증 -----------------
 def _strip_code_fences(text: str) -> str:
-    """```sql ...``` 같은 펜스 제거"""
     t = text.strip()
-    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)  # 앞쪽 펜스
-    t = re.sub(r"\s*```$", "", t)           # 뒤쪽 펜스
+    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
+    t = re.sub(r"\s*```$", "", t)
     return t.strip()
 
 def _remove_sql_comments(sql: str) -> str:
-    """-- 주석, /* */ 주석 제거 (문자열 리터럴 고려 X: 생성 SQL만 전제)"""
-    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.S)   # 블록 주석
-    sql = re.sub(r"^\s*--.*?$", "", sql, flags=re.M)  # 라인 주석
+    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.S)
+    sql = re.sub(r"^\s*--.*?$", "", sql, flags=re.M)
     return sql.strip()
 
 def _extract_first_select(text: str) -> str:
-    """
-    임의의 설명이 섞여도 첫 번째 SELECT 문만 추출.
-    SELECT ... ; 까지 캡처. 세미콜론이 없다면 문자열 끝까지.
-    """
     cleaned = _remove_sql_comments(_strip_code_fences(text))
     m = re.search(r"(?is)\bselect\b", cleaned)
     if not m:
@@ -107,7 +101,6 @@ def _extract_first_select(text: str) -> str:
     return (tail[:semi.start()] if semi else tail).strip()
 
 def _validate_sql_is_select(sql: str):
-    """첫 토큰 SELECT, 금지어 차단, 세미콜론 과다 차단"""
     if sql.count(";") > 1:
         raise ValueError("Multiple statements are not allowed.")
     if not re.match(r"(?is)^\s*select\b", sql):
@@ -117,7 +110,7 @@ def _validate_sql_is_select(sql: str):
         raise ValueError("Blocked SQL keyword detected.")
 
 # ----------------- 페이지/테마 -----------------
-st.set_page_config(page_title="보험사 경영공시 데이터 챗봇", page_icon="📊", layout="centered")
+st.set_page_config(page_title="보험사 경영공시 챗봇", page_icon="📊", layout="centered")
 
 # Pretendard + 글로벌 스타일 (모바일 타이틀 1줄 고정 포함)
 st.markdown("""
@@ -151,48 +144,55 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 }
 
 /* ====== 헤더/타이틀 - 모바일 한 줄 고정 ====== */
-.header { padding: 24px 20px 12px 20px; border-bottom: 1px solid #eef2f7; text-align: center; }
+.header {
+  padding: 39px 20px 12px 20px;  /* ⬅ 기존 24px에서 +15px(약 15pt) 상단 여백 추가 */
+  border-bottom: 1px solid #eef2f7;
+  text-align: center;
+}
 .title-row {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   flex-wrap: nowrap; max-width: 100%;
 }
 .header h1 {
   margin: 0; padding: 0;
-  font-size: clamp(22px, 5.5vw, 36px); /* 화면 폭에 따라 자동 축소/확대 */
+  font-size: clamp(22px, 5.5vw, 36px);
   font-weight: 800; letter-spacing: -0.02em; color: var(--text);
   white-space: nowrap;       /* ✅ 한 줄 강제 */
   overflow: hidden;          /* ✅ 넘치면 숨김 */
   text-overflow: ellipsis;   /* ✅ 말줄임표 */
   max-width: 100%;
 }
-.header svg { flex-shrink: 0; } /* ✅ 아이콘은 줄어들지 않도록 */
+.header svg { flex-shrink: 0; }
 .header .byline { color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85; }
 
-/* ====== 본문 ====== */
+/* ====== 섹션 ====== */
 .section { padding: 18px 20px 22px 20px; }
 
+/* ====== 입력창 강조 (검정 그림자 + 완전 pill) ====== */
 .input-like label { display:none!important; }
 .input-like .stTextInput>div>div>input {
-  height: 52px; font-size: 17px; padding: 0 16px;
-  background:#ffffff; border:1px solid #e5e7eb; border-radius:12px;
+  height: 56px; font-size: 17px; padding: 0 20px;
+  background:#ffffff; border:1px solid #e5e7eb;
+  border-radius: 9999px;                 /* ⬅ 반원 pill */
+  box-shadow: 0 10px 28px rgba(0,0,0,.25); /* ⬅ 검정 그림자 강조 */
 }
 .input-like .stTextInput>div>div>input:focus {
   outline: none; border-color: #dbeafe; box-shadow: 0 0 0 3px rgba(147,197,253,.35);
 }
 
+/* 버튼 기본(전체폭) → 이번엔 절반폭으로 중앙 정렬은 컬럼으로 처리 */
 .stButton>button {
-  width:100%; height:52px; font-weight:700; font-size:17px;
+  width:100%; height:48px; font-weight:700; font-size:16px;
   color:#fff; background: var(--blue);
   border-radius:12px; border:0; box-shadow: 0 2px 0 rgba(0,0,0,.03);
 }
 .stButton>button:hover { background: var(--blue-dark); }
 .stButton>button:disabled { background:#d1d5db !important; color:#fff !important; }
 
+/* 카드/표 등 */
 .card-subtitle { color:#334155; font-size:17px; margin: 0 0 10px; text-align:center; }
-
 .table-container .stDataFrame { border-radius:12px; overflow:hidden; border: 1px solid #e5e7eb; }
 hr.sep { border:none; border-top:1px solid #eef2f7; margin: 18px 0; }
-
 .small-note { color:#64748b; font-size:12px; margin-top:4px;}
 .footer-note { color:#64748b; font-size:12px; text-align:center; margin-top:12px; }
 
@@ -203,7 +203,7 @@ pre, code { font-size: 13px !important; }
 
 @media (max-width: 640px) {
   .card-subtitle { font-size: 16px; }
-  .input-like .stTextInput>div>div>input { height: 50px; font-size: 16px; }
+  .input-like .stTextInput>div>div>input { height: 54px; font-size: 16px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -213,7 +213,7 @@ st.markdown('<div class="container-card fadein">', unsafe_allow_html=True)
 st.markdown("""
 <div class="header">
   <div class="title-row">
-    <h1>보험사 경영공시 데이터 챗봇</h1>
+    <h1>보험사 경영공시 챗봇</h1>
     <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
          fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 8V4H8V8H12Z" />
@@ -234,15 +234,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ===== 실행 결과가 들어갈 상단 슬롯 (타이틀과 프롬프트 사이) =====
+result_area = st.container()   # <- 여기에 실행 결과를 그린다.
+
+# ===================== 입력 섹션 =====================
 st.markdown('<div class="section">', unsafe_allow_html=True)
 
 # ----------------- SQL 생성 (LangChain Agent) -----------------
 def generate_sql(user_question: str) -> str:
-    """LangChain create_sql_agent를 사용해 '실행하지 않고' SQL만 생성."""
     try:
-        st.markdown("OpenAI 프롬프트 (SQL 생성; LangChain Agent prefix)")
-        st.code(AGENT_PREFIX, language="markdown")
-        st.markdown("User 입력")
+        with st.expander("OpenAI 프롬프트 (SQL 생성; LangChain Agent prefix)", expanded=False):
+            st.code(AGENT_PREFIX, language="markdown")
+        st.caption("User 입력")
         st.code(user_question)
     except Exception:
         pass
@@ -255,12 +258,11 @@ def generate_sql(user_question: str) -> str:
     else:
         text = str(result)
 
-    # 방탄 파서: 첫 SELECT 문만 추출 → 코드펜스/주석 제거 → 트리밍
     sql = _extract_first_select(text)
     _validate_sql_is_select(sql)
 
     try:
-        st.markdown("OpenAI 응답 (SQL 생성)")
+        st.caption("OpenAI 응답 (SQL 생성)")
         st.code(sql, language="sql")
     except Exception:
         pass
@@ -279,25 +281,27 @@ def run_sql(sql: str) -> pd.DataFrame:
         return pd.read_sql_query(sql, conn)
 
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
-    preview_csv = df.to_csv(index=False)
+    preview_csv = df.head(20).to_csv(index=False)
     prompt = f"""질문: {q}
 아래 CSV 일부를 참고해서 3문장 이내로 한국어 요약을 써줘. 단위와 기간을 분명히 써.
 CSV 미리보기(최대 20행):
 {preview_csv}
 """
     try:
-        st.markdown("OpenAI 프롬프트 (요약)")
-        st.code(prompt, language="markdown")
+        with st.expander("OpenAI 프롬프트 (요약)", expanded=False):
+            st.code(prompt, language="markdown")
     except Exception:
         pass
+
     r = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role":"user","content": prompt}],
         temperature=0.2
     )
     summary_text = r.choices[0].message.content.strip()
+
     try:
-        st.markdown("OpenAI 응답 (요약)")
+        st.caption("OpenAI 응답 (요약)")
         st.code(summary_text)
     except Exception:
         pass
@@ -313,48 +317,55 @@ q = st.text_input(
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ----------------- 버튼: 한 번에 생성+실행(+자동 요약) -----------------
-go_btn = st.button("실행", use_container_width=True)
+# ----------------- 버튼: 절반 너비(가운데) + 원클릭 실행 -----------------
+c1, c2, c3 = st.columns([1, 2, 1])   # 가운데 컬럼만 버튼 -> 전체 대비 50% 폭
+with c2:
+    go_btn = st.button("실행", use_container_width=True)
 
+# 클릭 시: 결과는 상단 result_area에 그리기
 if go_btn:
     if not q:
         st.warning("질문을 입력하세요.")
     else:
         # 1) SQL 생성
-        with st.spinner("SQL을 생성하는 중..."):
-            try:
-                sql = generate_sql(q)
-                st.code(sql, language="sql")
-                st.session_state["sql"] = sql
-            except Exception as e:
+        try:
+            sql = generate_sql(q)
+            st.session_state["sql"] = sql
+        except Exception as e:
+            with result_area:
                 st.error(f"SQL 생성 오류: {e}")
-                st.stop()
+            st.stop()
 
-        # 2) 즉시 실행
-        with st.spinner("DB에서 데이터 조회 중..."):
-            try:
-                df = run_sql(st.session_state["sql"])
+        # 2) 즉시 실행 + 상단 결과 슬롯에 렌더링
+        try:
+            df = run_sql(st.session_state["sql"])
+            st.session_state["df"] = df
+            with result_area:
+                st.markdown('<div class="section">', unsafe_allow_html=True)
+                st.markdown('#### 실행 결과')
                 if df.empty:
                     st.info("결과가 없습니다.")
-                    st.session_state["df"] = df  # 빈 DF도 상태에는 저장
                 else:
                     st.markdown('<div class="table-container">', unsafe_allow_html=True)
                     st.dataframe(df, use_container_width=True)
                     st.markdown('</div>', unsafe_allow_html=True)
-                    st.session_state["df"] = df
-            except Exception as e:
+                st.markdown('</div>', unsafe_allow_html=True)
+        except Exception as e:
+            with result_area:
                 st.error(f"DB 실행 오류: {e}")
-                st.stop()
+            st.stop()
 
-        # 3) 자동 요약 생성
+        # 3) 자동 요약 생성 (있을 때만)
         df_prev = st.session_state.get("df")
         if df_prev is not None and not df_prev.empty:
-            with st.spinner("요약 생성 중..."):
-                try:
-                    summary = summarize_answer(q, df_prev)
-                    st.success(summary)
-                    st.session_state["summary"] = summary
-                except Exception as e:
+            try:
+                with result_area:
+                    with st.spinner("요약 생성 중..."):
+                        summary = summarize_answer(q, df_prev)
+                        st.success(summary)
+                        st.session_state["summary"] = summary
+            except Exception as e:
+                with result_area:
                     st.error(f"요약 오류: {e}")
 
 st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
@@ -363,13 +374,14 @@ st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
 df_prev = st.session_state.get("df")
 if df_prev is not None and not df_prev.empty:
     if st.button("요약 생성", use_container_width=True):
-        with st.spinner("요약 생성 중..."):
-            try:
-                summary = summarize_answer(q, df_prev)
-                st.success(summary)
-                st.session_state["summary"] = summary
-            except Exception as e:
-                st.error(f"요약 오류: {e}")
+        with result_area:
+            with st.spinner("요약 생성 중..."):
+                try:
+                    summary = summarize_answer(q, df_prev)
+                    st.success(summary)
+                    st.session_state["summary"] = summary
+                except Exception as e:
+                    st.error(f"요약 오류: {e}")
 else:
     st.caption("실행 결과가 표시되면 요약을 볼 수 있습니다.")
 
