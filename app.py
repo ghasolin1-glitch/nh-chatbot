@@ -151,7 +151,7 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 }
 .title-row {
   display: flex; align-items: center; justify-content: center;
-  gap: 5px; /* ⬅ 간격 좁힘 */
+  gap: 5px; /* ✅ 1번: 간격 10px -> 5px로 좁힘 */
   flex-wrap: nowrap; max-width: 100%;
 }
 .header h1 {
@@ -163,7 +163,10 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
   text-overflow: ellipsis;    /* ✅ 말줄임표 */
   max-width: 100%;
 }
-.header svg { flex-shrink: 0; width: 34px; height: 34px; } /* ⬅ 아이콘 크기 30% 증가 */
+.header svg { 
+  flex-shrink: 0; 
+  width: 34px; height: 34px; /* ✅ 2번: CSS에서도 크기 30% 증가 */
+}
 .header .byline { color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85; }
 
 /* ====== 섹션 ====== */
@@ -176,47 +179,47 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
   background:#ffffff; border:1px solid #0064FF;
   border-radius: 9999px;  /* pill */
   box-shadow:
-    0 0 15px rgba(0, 100, 255, 0.5), /* ⬅ 그림자 더 강하게 */
-    0 0 30px rgba(0, 100, 255, 0.3), /* ⬅ 그림자 더 강하게 */
-    0 0 45px rgba(0, 100, 255, 0.2); /* ⬅ 그림자 더 강하게 */
+    0 0 15px rgba(0, 100, 255, 0.5), 
+    0 0 30px rgba(0, 100, 255, 0.3), 
+    0 0 45px rgba(0, 100, 255, 0.2); 
   animation: glowPulse 2.2s infinite ease-in-out; /* ✨ 반짝반짝 */
 }
 .input-like .stTextInput>div>div>input:focus {
   outline: none;
   border-color: #4f9cff;
   box-shadow:
-    0 0 18px rgba(0, 100, 255, 0.8), /* ⬅ 포커스 시 그림자 더 강하게 */
-    0 0 36px rgba(0, 100, 255, 0.5), /* ⬅ 포커스 시 그림자 더 강하게 */
-    0 0 48px rgba(0, 100, 255, 0.4); /* ⬅ 포커스 시 그림자 더 강하게 */
+    0 0 18px rgba(0, 100, 255, 0.8), 
+    0 0 36px rgba(0, 100, 255, 0.5), 
+    0 0 48px rgba(0, 100, 255, 0.4); 
   animation: glowPulseFast 1.4s infinite ease-in-out; /* 더 강한 반짝 */
 }
 /* ✨ 반짝이는 Keyframes */
 @keyframes glowPulse {
   0%, 100% {
     box-shadow:
-      0 0 15px rgba(0, 100, 255, 0.35), /* ⬅ 그림자 값 조정 */
-      0 0 25px rgba(0, 100, 255, 0.20), /* ⬅ 그림자 값 조정 */
-      0 0 35px rgba(0, 100, 255, 0.10); /* ⬅ 그림자 값 조정 */
+      0 0 15px rgba(0, 100, 255, 0.35), 
+      0 0 25px rgba(0, 100, 255, 0.20), 
+      0 0 35px rgba(0, 100, 255, 0.10); 
   }
   50% {
     box-shadow:
-      0 0 20px rgba(0, 100, 255, 0.55), /* ⬅ 그림자 값 조정 */
-      0 0 35px rgba(0, 100, 255, 0.35), /* ⬅ 그림자 값 조정 */
-      0 0 40px rgba(0, 100, 255, 0.28); /* ⬅ 그림자 값 조정 */
+      0 0 20px rgba(0, 100, 255, 0.55), 
+      0 0 35px rgba(0, 100, 255, 0.35), 
+      0 0 40px rgba(0, 100, 255, 0.28); 
   }
 }
 @keyframes glowPulseFast {
   0%, 100% {
     box-shadow:
-      0 0 18px rgba(0, 100, 255, 0.55), /* ⬅ 그림자 값 조정 */
-      0 0 28px rgba(0, 100, 255, 0.35), /* ⬅ 그림자 값 조정 */
-      0 0 34px rgba(0, 100, 255, 0.25); /* ⬅ 그림자 값 조정 */
+      0 0 18px rgba(0, 100, 255, 0.55), 
+      0 0 28px rgba(0, 100, 255, 0.35), 
+      0 0 34px rgba(0, 100, 255, 0.25); 
   }
   50% {
     box-shadow:
-      0 0 24px rgba(0, 100, 255, 0.85), /* ⬅ 그림자 값 조정 */
-      0 0 40px rgba(0, 100, 255, 0.55), /* ⬅ 그림자 값 조정 */
-      0 0 46px rgba(0, 100, 255, 0.40); /* ⬅ 그림자 값 조정 */
+      0 0 24px rgba(0, 100, 255, 0.85), 
+      0 0 40px rgba(0, 100, 255, 0.55), 
+      0 0 46px rgba(0, 100, 255, 0.40); 
   }
 }
 
@@ -254,7 +257,7 @@ st.markdown("""
 <div class="header">
   <div class="title-row">
     <h1>보험사 경영공시 챗봇</h1>
-    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
+    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24"
           fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 8V4H8V8H12Z" />
       <path d="M16 8V4H12V8H16Z" />
@@ -275,6 +278,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ===== 실행 결과가 들어갈 상단 슬롯 (타이틀과 프롬프트 사이) =====
+# ✅ 3번: 결과가 표시될 위치. (헤더와 입력창 사이)
 result_area = st.container()    # <- 여기에 실행 결과를 그린다.
 
 # ===================== 입력 섹션 =====================
@@ -365,7 +369,7 @@ with c2:
 # 클릭 시: 결과는 상단 result_area에 그리기
 if go_btn:
     if not q:
-        with result_area:
+        with result_area: # ✅ 3번 위치에 경고 표시
             st.warning("질문을 입력하세요.")
     else:
         # 1) SQL 생성
@@ -373,7 +377,7 @@ if go_btn:
             sql = generate_sql(q)
             st.session_state["sql"] = sql
         except Exception as e:
-            with result_area:
+            with result_area: # ✅ 3번 위치에 오류 표시
                 st.error(f"SQL 생성 오류: {e}")
             st.stop()
 
@@ -381,7 +385,7 @@ if go_btn:
         try:
             df = run_sql(st.session_state["sql"])
             st.session_state["df"] = df
-            with result_area:
+            with result_area: # ✅ 3번 위치에 결과 테이블 표시
                 st.markdown('<div class="section">', unsafe_allow_html=True)
                 st.markdown('#### 실행 결과')
                 if df.empty:
@@ -392,7 +396,7 @@ if go_btn:
                     st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
         except Exception as e:
-            with result_area:
+            with result_area: # ✅ 3번 위치에 오류 표시
                 st.error(f"DB 실행 오류: {e}")
             st.stop()
 
@@ -400,13 +404,13 @@ if go_btn:
         df_prev = st.session_state.get("df")
         if df_prev is not None and not df_prev.empty:
             try:
-                with result_area:
+                with result_area: # ✅ 3번 위치에 요약 표시
                     with st.spinner("요약 생성 중..."):
                         summary = summarize_answer(q, df_prev)
                         st.success(summary)
                         st.session_state["summary"] = summary
             except Exception as e:
-                with result_area:
+                with result_area: # ✅ 3번 위치에 오류 표시
                     st.error(f"요약 오류: {e}")
 
 st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
@@ -415,7 +419,7 @@ st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
 df_prev = st.session_state.get("df")
 if df_prev is not None and not df_prev.empty:
     if st.button("요약 생성", use_container_width=True):
-        with result_area:
+        with result_area: # ✅ 3번 위치에 요약 표시 (재생성)
             with st.spinner("요약 생성 중..."):
                 try:
                     summary = summarize_answer(q, df_prev)
