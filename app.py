@@ -1,4 +1,4 @@
-# app.py — 보험사 경영공시 데이터 챗봇 (SQL 생성+실행 One-Click)
+# app.py — 보험사 경영공시 데이터 챗봇 (SQL 생성+실행 One-Click, 모바일 타이틀 1줄 고정)
 import os
 import json
 import re
@@ -119,7 +119,7 @@ def _validate_sql_is_select(sql: str):
 # ----------------- 페이지/테마 -----------------
 st.set_page_config(page_title="보험사 경영공시 데이터 챗봇", page_icon="📊", layout="centered")
 
-# Pretendard + 글로벌 스타일
+# Pretendard + 글로벌 스타일 (모바일 타이틀 1줄 고정 포함)
 st.markdown("""
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 <link rel="stylesheet" as="style" crossorigin
@@ -135,6 +135,7 @@ st.markdown("""
   --card:#ffffff;
   --ring:#93c5fd;
 }
+
 html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !important; }
 * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue',
      'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif !important; }
@@ -148,9 +149,26 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
   box-shadow: 0 2px 12px rgba(2, 6, 23, 0.06);
   border: 1px solid #eef2f7;
 }
+
+/* ====== 헤더/타이틀 - 모바일 한 줄 고정 ====== */
 .header { padding: 24px 20px 12px 20px; border-bottom: 1px solid #eef2f7; text-align: center; }
-.header h1 { margin: 0; padding: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+.title-row {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  flex-wrap: nowrap; max-width: 100%;
+}
+.header h1 {
+  margin: 0; padding: 0;
+  font-size: clamp(22px, 5.5vw, 36px); /* 화면 폭에 따라 자동 축소/확대 */
+  font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+  white-space: nowrap;       /* ✅ 한 줄 강제 */
+  overflow: hidden;          /* ✅ 넘치면 숨김 */
+  text-overflow: ellipsis;   /* ✅ 말줄임표 */
+  max-width: 100%;
+}
+.header svg { flex-shrink: 0; } /* ✅ 아이콘은 줄어들지 않도록 */
 .header .byline { color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85; }
+
+/* ====== 본문 ====== */
 .section { padding: 18px 20px 22px 20px; }
 
 .input-like label { display:none!important; }
@@ -184,7 +202,6 @@ hr.sep { border:none; border-top:1px solid #eef2f7; margin: 18px 0; }
 pre, code { font-size: 13px !important; }
 
 @media (max-width: 640px) {
-  .header h1 { font-size: 28px; }
   .card-subtitle { font-size: 16px; }
   .input-like .stTextInput>div>div>input { height: 50px; font-size: 16px; }
 }
@@ -195,10 +212,10 @@ pre, code { font-size: 13px !important; }
 st.markdown('<div class="container-card fadein">', unsafe_allow_html=True)
 st.markdown("""
 <div class="header">
-  <div style="display:flex; gap:10px; align-items:center; justify-content:center;">
+  <div class="title-row">
     <h1>보험사 경영공시 데이터 챗봇</h1>
     <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
-         fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+         fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 8V4H8V8H12Z" />
       <path d="M16 8V4H12V8H16Z" />
       <path d="M12 14V12H8V14H12Z" />
@@ -329,7 +346,7 @@ if go_btn:
                 st.error(f"DB 실행 오류: {e}")
                 st.stop()
 
-        # 3) 자동 요약 생성 (새로 추가된 로직)
+        # 3) 자동 요약 생성
         df_prev = st.session_state.get("df")
         if df_prev is not None and not df_prev.empty:
             with st.spinner("요약 생성 중..."):
