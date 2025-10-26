@@ -1,4 +1,4 @@
-# app.py — 보험사 경영공시 챗봇 (최종 결과만 표시, 중간과정/버튼 제거)
+# app.py — 보험사 경영공시 챗봇 (아이콘/버튼너비 수정)
 import os
 import json
 import re
@@ -149,9 +149,14 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
   border-bottom: 1px solid #eef2f7;
   text-align: center;
 }
+/* ✅ 1. (수정) 아이콘/텍스트 세로(column) 정렬 */
 .title-row {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  flex-wrap: nowrap; max-width: 100%;
+  display: flex;
+  flex-direction: column; /* 아이콘/텍스트 세로 배치 */
+  align-items: center; 
+  justify-content: center; 
+  gap: 10px;
+  max-width: 100%;
 }
 .header h1 {
   margin: 0; padding: 0;
@@ -238,10 +243,10 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 
 # ----------------- 헤더 -----------------
 st.markdown('<div class="container-card fadein">', unsafe_allow_html=True)
+# ✅ 1. (수정) SVG 아이콘을 h1 타이틀 위로 이동
 st.markdown("""
 <div class="header">
   <div class="title-row">
-    <h1>보험사 경영공시 챗봇</h1>
     <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
          fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 8V4H8V8H12Z" />
@@ -257,6 +262,7 @@ st.markdown("""
       <path d="M4 4H2V2H4V4Z" />
       <path d="M22 4H20V2H22V4Z" />
     </svg>
+    <h1>보험사 경영공시 챗봇</h1>
   </div>
   <div class="byline">made by 태훈 · 현철</div>
 </div>
@@ -266,7 +272,6 @@ st.markdown("""
 st.markdown('<div class="section">', unsafe_allow_html=True)
 
 # ----------------- SQL 생성 (LangChain Agent) -----------------
-# ✅ (수정) 중간 과정(st.expander, st.caption, st.code) 모두 제거
 def generate_sql(user_question: str) -> str:
     sql_agent = get_sql_agent()
     result = sql_agent.invoke({"input": user_question})
@@ -293,7 +298,6 @@ def run_sql(sql: str) -> pd.DataFrame:
         return pd.read_sql_query(sql, conn)
 
 # ----------------- 요약 생성 -----------------
-# ✅ (수정) 중간 과정(st.expander, st.caption, st.code) 모두 제거
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
     preview_csv = df.head(20).to_csv(index=False)
     prompt = f"""질문: {q}
@@ -319,8 +323,9 @@ q = st.text_input(
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ----------------- 버튼: 절반 너비(가운데) + 원클릭 실행 -----------------
-c1, c2, c3 = st.columns([1, 2, 1])   # 가운데 컬럼만 버튼 -> 전체 대비 50% 폭
+# ----------------- 버튼: 60% 너비(가운데) + 원클릭 실행 -----------------
+# ✅ 2. (수정) 컬럼 비율을 [1, 3, 1]로 변경 (중앙 3/5 = 60%)
+c1, c2, c3 = st.columns([1, 3, 1])   # 가운데 컬럼만 버튼 -> 전체 대비 60% 폭
 with c2:
     go_btn = st.button("실행", use_container_width=True)
 
@@ -333,7 +338,7 @@ if go_btn:
         with result_area:
             st.warning("질문을 입력하세요.")
     else:
-        # 1) SQL 생성 (중간 과정 없음)
+        # 1) SQL 생성
         try:
             sql = generate_sql(q)
             st.session_state["sql"] = sql
@@ -348,7 +353,6 @@ if go_btn:
             st.session_state["df"] = df
             with result_area:
                 st.markdown('<div class="section" style="padding-top: 5px;">', unsafe_allow_html=True)
-                # ✅ (요청) '실행 결과' 제목 표시
                 st.markdown('#### 실행 결과')
                 if df.empty:
                     st.info("결과가 없습니다.")
@@ -362,22 +366,18 @@ if go_btn:
                 st.error(f"DB 실행 오류: {e}")
             st.stop()
 
-        # 3) 자동 요약 생성 (중간 과정 없음)
+        # 3) 자동 요약 생성
         df_prev = st.session_state.get("df")
         if df_prev is not None and not df_prev.empty:
             try:
-                # 요약은 result_area에 이어서 표시
                 with result_area:
                     with st.spinner("요약 생성 중..."):
                         summary = summarize_answer(q, df_prev)
-                        # ✅ (요청) 최종 요약 결과만 표시
                         st.success(summary)
                         st.session_state["summary"] = summary
             except Exception as e:
                 with result_area:
                     st.error(f"요약 오류: {e}")
-
-# ✅ (수정) '요약 생성' 버튼, hr, 하단 캡션 모두 제거
 
 st.markdown('</div>', unsafe_allow_html=True)  # section 종료
 st.markdown('</div>', unsafe_allow_html=True)  # container-card 종료
