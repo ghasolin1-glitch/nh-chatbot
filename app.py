@@ -301,8 +301,8 @@ def run_sql(sql: str) -> pd.DataFrame:
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
     preview_csv = df.head(20).to_csv(index=False)
     prompt = f"""질문: {q}
-아래 CSV 일부를 참고해서 3문장 이내로 한국어 요약을 써줘. 단위와 기간을 분명히 써.
-CSV 미리보기(최대 20행):
+    너는 뛰어난 재무분석가야.  아래 CSV 일부를 참고해서 한국어 요약을 써줘. 단위와 기간을 분명히 써.
+CSV :
 {preview_csv}
 """
     r = client.chat.completions.create(
@@ -317,7 +317,7 @@ CSV 미리보기(최대 20행):
 st.markdown('<div class="input-like">', unsafe_allow_html=True)
 q = st.text_input(
     label="질문",
-    placeholder="예) 2023년 NH농협생명 매출 월별 추이 보여줘",
+    placeholder="예) 2023년 NH농협생명 K-ICS비율 월별 추이 보여줘",
     label_visibility="collapsed",
     key="q_input"
 )
