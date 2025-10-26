@@ -1,4 +1,4 @@
-# app.py — 완성형 UI + 기존 로직 (병합본)
+# app.py — 버그 수정 (st.text_input + Glow CSS 적용)
 import os
 import json
 import re
@@ -60,7 +60,7 @@ AGENT_PREFIX = """
 - 첫 토큰은 반드시 SELECT, CTE/WITH/EXPLAIN 금지. 세미콜론은 최대 1개만 허용.
 - 사용자가 'YYYY년 MM월'또는 '2024.12' 또는 'YY년 MM월'을 입력하면 반드시 'closing_ym = YYYYMM'으로 변환한다.
 - 최근 연말로 추정하거나 자동 보정하지 않는다.
-- 회사명은 "미래에셋생명,흥국화재,한화생명,한화손해,iM라이프생명,흥국생명,메리츠화재,KB생명,신한생명,DB생명,하나생명,BNP생명,푸본현대생명,ABL생명,DB손해,동양생명,농협생명,삼성화재,교보라이프플래닛생명,메트라이프생명,처브라이프생명보험,AIA생명,현대해상,교보생명,롯데손해,KDB생명,라이나생명,IBK생명,코리안리,KB손해,삼성생명,농협손보"로 DB에 저장되어있다.
+- 회사명은 "미래에셋생명,흥국화재,한화생명,한화손해,iM라이프생명,흥국생명,메리츠화재,KB생명,신한생명,DB생명,하나생명,BNP생명,푸본현대생명,ABL생명,DB손해,동양생명,농협생명,삼성화재,교보라이프플래닛생명,메트라이프생명,처브라이f생명보험,AIA생명,현대해상,교보생명,롯데손해,KDB생명,라이나생명,IBK생명,코리안리,KB손해,삼성생명,농협손보"로 DB에 저장되어있다.
 """.strip()
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
@@ -110,15 +110,14 @@ def _validate_sql_is_select(sql: str):
         raise ValueError("Blocked SQL keyword detected.")
 
 # ----------------- 페이지/테마 -----------------
-# ✅ (신규 UI) 페이지 설정
 st.set_page_config(page_title="보험사 경영공시 챗봇", page_icon="🤖", layout="centered")
 
-# ✅ (신규 UI) CSS: Glow input + (이전 코드) Button/Table 스타일 병합
+# ✅ (수정) CSS: .glow-input 대신 st.text_input 위젯을 직접 타겟팅
 st.markdown("""
 <style>
 :root {
     --blue:#0064FF;
-    --blue-dark:#0050CC; /* (이전 코드) 버튼 호버용 */
+    --blue-dark:#0050CC;
 }
 
 html, body, [data-testid="stAppViewContainer"] { background: #ECEEF1 !important; }
@@ -129,55 +128,56 @@ html, body, [data-testid="stAppViewContainer"] { background: #ECEEF1 !important;
 
 .byline { color:#6b7280; font-size:13px; margin-bottom:25px; }
 
-.glow-input {
-  width:480px;
-  margin:auto;
-  background:white;
-  border:2px solid var(--blue);
-  border-radius:999px;
-  padding:10px 25px;
-  text-align:center;
-  font-size:18px;
-  box-shadow:
-    0 0 25px rgba(0,100,255,.55),
-    0 0 50px rgba(0,100,255,.35);
-  animation:glowPulse 2s infinite ease-in-out;
+/* ✅ (수정) .glow-input 대신 Streamlit 위젯을 직접 스타일링 */
+[data-testid="stTextInput"] {
+    width: 480px;
+    margin: auto;
+}
+[data-testid="stTextInput"] > div > div > input {
+    background: white;
+    border: 2px solid var(--blue);
+    border-radius: 999px;
+    padding: 10px 25px;
+    text-align: center;
+    font-size: 18px;
+    box-shadow:
+        0 0 25px rgba(0, 100, 255, .55),
+        0 0 50px rgba(0, 100, 255, .35);
+    animation: glowPulse 2s infinite ease-in-out;
+}
+[data-testid="stTextInput"] > div > div > input:focus {
+    outline: none !important;
 }
 
 @keyframes glowPulse {
-  50% {
-    box-shadow:
-      0 0 40px rgba(0,100,255,.9),
-      0 0 70px rgba(0,100,255,.5);
-  }
-}
-
-.glow-input:focus {
-  outline:none !important;
+    50% {
+        box-shadow:
+            0 0 40px rgba(0, 100, 255, .9),
+            0 0 70px rgba(0, 100, 255, .5);
+    }
 }
 
 .bot-icon svg path {
-  stroke: var(--blue)!important;
-  stroke-width:1.8!important;
-  fill:none!important;
+    stroke: var(--blue) !important;
+    stroke-width: 1.8 !important;
+    fill: none !important;
 }
 
-/* (이전 코드) 버튼 스타일 - UI 요소이므로 유지 */
 .stButton>button {
-  width:100%; height:48px; font-weight:700; font-size:16px;
-  color:#fff; background: var(--blue);
-  border-radius:12px; border:0; box-shadow: 0 2px 0 rgba(0,0,0,.03);
+    width: 100%; height: 48px; font-weight: 700; font-size: 16px;
+    color: #fff; background: var(--blue);
+    border-radius: 12px; border: 0; box-shadow: 0 2px 0 rgba(0, 0, 0, .03);
 }
 .stButton>button:hover { background: var(--blue-dark); }
-.stButton>button:disabled { background:#d1d5db !important; color:#fff !important; }
+.stButton>button:disabled { background: #d1d5db !important; color: #fff !important; }
 
-/* (이전 코드) 테이블 스타일 - UI 요소이므로 유지 */
-.table-container .stDataFrame { border-radius:12px; overflow:hidden; border: 1px solid #e5e7eb; }
+.table-container .stDataFrame {
+    border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- 헤더 -----------------
-# ✅ (신규 UI) 헤더
+# ----------------- 헤더 (신규 UI 유지) -----------------
 st.markdown("""
 <div class="header">
   <div class="title">
@@ -264,47 +264,21 @@ CSV 미리보기(최대 20행):
     return summary_text
 
 # ----------------- 입력창 -----------------
-# ✅ (신규 UI) Custom HTML Input
-# (JS <-> Streamlit 동기화를 위해 일부 로직 수정)
+# ✅ (수정) HTML/JS 입력창 대신 Streamlit 기본 st.text_input 사용
+# CSS가 이 위젯에 Glow 스타일을 적용할 것입니다.
+q = st.text_input(
+    "질문",
+    placeholder="예) 2023년 농협생명 K-ICS비율 알려줘",
+    label_visibility="collapsed",
+    key="user_q"  # session_state 키
+)
 
-if "user_q" not in st.session_state:
-    st.session_state["user_q"] = ""
-
-# HTML input이 st.session_state 값을 표시하도록 value 바인딩
-st.write(f"""
-<input id="glowinput" class="glow-input" 
-placeholder="예) 2023년 농협생명 K-ICS비율 알려줘"
-value="{st.session_state.get("user_q", "")}"
-onchange="window.parent.postMessage({{type:'setInput', value:this.value}}, '*')">
-""", unsafe_allow_html=True)
-
-# JS에서 보낸 메시지(postMessage)를 수신하는 컴포넌트
-# 이 컴포넌트의 반환 값(q_from_js)이 실제 입력 값
-q_from_js = st.components.v1.html("""
-<script>
-window.addEventListener('message', (e) => {
-  if (e.data.type === 'setInput') {
-    const input = e.data.value;
-    // 이 컴포넌트(keyless)의 값을 JS 입력값으로 설정
-    window.parent.postMessage({type: 'streamlit:setComponentValue', value: input}, '*');
-  }
-});
-</script>
-""", height=0)
-
-# JS 컴포넌트 값이 변경되면(q_from_js), user_q 세션 상태를 업데이트
-if q_from_js:
-    st.session_state.user_q = q_from_js
-
-# 세션 상태에서 최종 q 값을 읽어옴
-q = st.session_state.get("user_q", "")
-
-st.write("") # (신규 UI) 스페이서
+st.write("") # 스페이서
 
 # ----------------- 버튼: (신규 UI) 전체 너비 버튼 -----------------
 go_btn = st.button("실행", use_container_width=True)
 
-# ✅ (로직 수정) 실행: 결과는 'result_area' 대신 하단에 바로 그리기
+# ✅ (수정) 'q' 변수가 이제 st.text_input의 값이므로 로직이 정상 작동
 if go_btn:
     if not q:
         st.warning("질문을 입력하세요.")
@@ -317,7 +291,7 @@ if go_btn:
             st.error(f"SQL 생성 오류: {e}")
             st.stop()
 
-        # 2) 즉시 실행 + 하단 결과 렌더링 (이전 로직, 'result_area' 제거)
+        # 2) 즉시 실행 + 하단 결과 렌더링 (이전 로직)
         try:
             df = run_sql(st.session_state["sql"])
             st.session_state["df"] = df
@@ -332,7 +306,7 @@ if go_btn:
             st.error(f"DB 실행 오류: {e}")
             st.stop()
 
-        # 3) 자동 요약 생성 (이전 로직, 'result_area' 제거)
+        # 3) 자동 요약 생성 (이전 로직)
         df_prev = st.session_state.get("df")
         if df_prev is not None and not df_prev.empty:
             try:
@@ -342,5 +316,3 @@ if go_btn:
                     st.session_state["summary"] = summary
             except Exception as e:
                 st.error(f"요약 오류: {e}")
-
-# (신규 UI) 하단 '요약 생성' 버튼 등 불필요한 UI 요소 제거
