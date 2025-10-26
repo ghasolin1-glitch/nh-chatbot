@@ -1,4 +1,4 @@
-# app.py — 보험사 경영공시 챗봇 (SQL 생성+실행 One-Click, 결과 상단 슬롯, 모바일 타이틀 1줄 고정)
+# app.py — 보험사 경영공시 챗봇 (SQL 생성+실행 One-Click, 결과 상단 슬롯, 파란 글로우 입력창, 모바일 타이틀 1줄 고정)
 import os
 import json
 import re
@@ -145,7 +145,7 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 
 /* ====== 헤더/타이틀 - 모바일 한 줄 고정 ====== */
 .header {
-  padding: 39px 20px 12px 20px;  /* ⬅ 기존 24px에서 +15px(약 15pt) 상단 여백 추가 */
+  padding: 39px 20px 12px 20px;  /* ⬅ 상단 여백 +15px (약 15pt) */
   border-bottom: 1px solid #eef2f7;
   text-align: center;
 }
@@ -168,16 +168,55 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 /* ====== 섹션 ====== */
 .section { padding: 18px 20px 22px 20px; }
 
-/* ====== 입력창 강조 (검정 그림자 + 완전 pill) ====== */
+/* ====== 입력창 강조: 파란빛 글로우 + 반짝효과 (pill) ====== */
 .input-like label { display:none!important; }
 .input-like .stTextInput>div>div>input {
   height: 56px; font-size: 17px; padding: 0 20px;
-  background:#ffffff; border:1px solid #e5e7eb;
-  border-radius: 9999px;                 /* ⬅ 반원 pill */
-  box-shadow: 0 10px 28px rgba(0,0,0,.25); /* ⬅ 검정 그림자 강조 */
+  background:#ffffff; border:1px solid #0064FF;
+  border-radius: 9999px;  /* pill */
+  box-shadow:
+    0 0 10px rgba(0, 100, 255, 0.35),
+    0 0 20px rgba(0, 100, 255, 0.20),
+    0 0 30px rgba(0, 100, 255, 0.10);
+  animation: glowPulse 2.2s infinite ease-in-out; /* ✨ 반짝반짝 */
 }
 .input-like .stTextInput>div>div>input:focus {
-  outline: none; border-color: #dbeafe; box-shadow: 0 0 0 3px rgba(147,197,253,.35);
+  outline: none;
+  border-color: #4f9cff;
+  box-shadow:
+    0 0 12px rgba(0, 100, 255, 0.6),
+    0 0 24px rgba(0, 100, 255, 0.35),
+    0 0 32px rgba(0, 100, 255, 0.25);
+  animation: glowPulseFast 1.4s infinite ease-in-out; /* 더 강한 반짝 */
+}
+/* ✨ 반짝이는 Keyframes */
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 10px rgba(0, 100, 255, 0.25),
+      0 0 20px rgba(0, 100, 255, 0.15),
+      0 0 30px rgba(0, 100, 255, 0.05);
+  }
+  50% {
+    box-shadow:
+      0 0 14px rgba(0, 100, 255, 0.45),
+      0 0 28px rgba(0, 100, 255, 0.25),
+      0 0 32px rgba(0, 100, 255, 0.18);
+  }
+}
+@keyframes glowPulseFast {
+  0%, 100% {
+    box-shadow:
+      0 0 12px rgba(0, 100, 255, 0.45),
+      0 0 22px rgba(0, 100, 255, 0.25),
+      0 0 28px rgba(0, 100, 255, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 18px rgba(0, 100, 255, 0.75),
+      0 0 34px rgba(0, 100, 255, 0.45),
+      0 0 40px rgba(0, 100, 255, 0.30);
+  }
 }
 
 /* 버튼 기본(전체폭) → 이번엔 절반폭으로 중앙 정렬은 컬럼으로 처리 */
@@ -325,7 +364,8 @@ with c2:
 # 클릭 시: 결과는 상단 result_area에 그리기
 if go_btn:
     if not q:
-        st.warning("질문을 입력하세요.")
+        with result_area:
+            st.warning("질문을 입력하세요.")
     else:
         # 1) SQL 생성
         try:
