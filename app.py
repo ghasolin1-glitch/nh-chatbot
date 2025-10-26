@@ -1,4 +1,4 @@
-# app.py — 디자인 리팩터링 (기능 동일, LangChain SQL Agent 적용)
+# app.py — 보험사 경영공시 데이터 챗봇 (SQL 생성+실행 One-Click)
 import os
 import json
 import re
@@ -8,7 +8,16 @@ import psycopg
 
 # ====== LangChain / OpenAI LLM ======
 from langchain_community.utilities import SQLDatabase
-from langchain_community.agent_toolkits import create_sql_agent
+
+# create_sql_agent 경로 버전별 대응
+try:
+    from langchain_community.agent_toolkits import create_sql_agent
+except ImportError:
+    try:
+        from langchain_community.agent_toolkits.sql.base import create_sql_agent
+    except ImportError:
+        from langchain.agents.agent_toolkits import create_sql_agent
+
 from langchain_openai import ChatOpenAI
 # ====================================
 
@@ -26,7 +35,9 @@ DB_PASS = os.getenv("DB_PASS") or st.secrets.get("DB_PASS")
 DB_PORT = int(os.getenv("DB_PORT") or st.secrets.get("DB_PORT", 5432))
 
 if not OPENAI_API_KEY:
+    st.error("OPENAI_API_KEY 설정이 되어 있지 않습니다.")
     st.stop()
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ====== LangChain용 DB/LLM/에이전트 초기화 ======
@@ -35,7 +46,6 @@ SQLALCHEMY_URI = (
     "?sslmode=require"
 )
 
-# 🚫 예시는 모델이 그대로 베끼는 경우가 많아 제거
 AGENT_PREFIX = """
 당신은 PostgreSQL SQL 전문가다. 다음 규칙을 반드시 지켜라.
 
@@ -50,6 +60,7 @@ AGENT_PREFIX = """
 - 첫 토큰은 반드시 SELECT, CTE/WITH/EXPLAIN 금지. 세미콜론은 최대 1개만 허용.
 - 사용자가 'YYYY년 MM월'또는 '2024.12' 또는 'YY년 MM월'을 입력하면 반드시 'closing_ym = YYYYMM'으로 변환한다.
 - 최근 연말로 추정하거나 자동 보정하지 않는다.
+- 회사명은 "미래에셋생명,흥국화재,한화생명,한화손해,iM라이프생명,흥국생명,메리츠화재,KB생명,신한생명,DB생명,하나생명,BNP생명,푸본현대생명,ABL생명,DB손해,동양생명,농협생명,삼성화재,교보라이프플래닛생명,메트라이프생명,처브라이프생명보험,AIA생명,현대해상,교보생명,롯데손해,KDB생명,라이나생명,IBK생명,코리안리,KB손해,삼성생명,농협손보"로 DB에 저장되어있다.
 """.strip()
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
@@ -59,10 +70,9 @@ def get_lc_db():
     return SQLDatabase.from_uri(SQLALCHEMY_URI)
 
 def get_sql_agent():
-    lc_db = get_lc_db()
     return create_sql_agent(
         llm=llm,
-        db=lc_db,
+        db=get_lc_db(),
         agent_type="openai-tools",
         verbose=False,
         prefix=AGENT_PREFIX,
@@ -72,18 +82,14 @@ def get_sql_agent():
 def _strip_code_fences(text: str) -> str:
     """```sql ...``` 같은 펜스 제거"""
     t = text.strip()
-    # 앞쪽 펜스
-    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
-    # 뒤쪽 펜스
-    t = re.sub(r"\s*```$", "", t)
+    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)  # 앞쪽 펜스
+    t = re.sub(r"\s*```$", "", t)           # 뒤쪽 펜스
     return t.strip()
 
 def _remove_sql_comments(sql: str) -> str:
     """-- 주석, /* */ 주석 제거 (문자열 리터럴 고려 X: 생성 SQL만 전제)"""
-    # 블록 주석
-    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.S)
-    # 라인 주석
-    sql = re.sub(r"^\s*--.*?$", "", sql, flags=re.M)
+    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.S)   # 블록 주석
+    sql = re.sub(r"^\s*--.*?$", "", sql, flags=re.M)  # 라인 주석
     return sql.strip()
 
 def _extract_first_select(text: str) -> str:
@@ -91,26 +97,21 @@ def _extract_first_select(text: str) -> str:
     임의의 설명이 섞여도 첫 번째 SELECT 문만 추출.
     SELECT ... ; 까지 캡처. 세미콜론이 없다면 문자열 끝까지.
     """
-    # 코드펜스/주석 제거
     cleaned = _remove_sql_comments(_strip_code_fences(text))
     m = re.search(r"(?is)\bselect\b", cleaned)
     if not m:
         return cleaned.strip()
     start = m.start()
     tail = cleaned[start:]
-    # 첫 세미콜론까지만 취한다(없으면 전체)
     semi = re.search(r";", tail)
     return (tail[:semi.start()] if semi else tail).strip()
 
 def _validate_sql_is_select(sql: str):
     """첫 토큰 SELECT, 금지어 차단, 세미콜론 과다 차단"""
-    # 세미콜론 1개 초과 금지
     if sql.count(";") > 1:
         raise ValueError("Multiple statements are not allowed.")
-    # 첫 토큰 SELECT
     if not re.match(r"(?is)^\s*select\b", sql):
         raise ValueError("Only SELECT queries are allowed.")
-    # 블랙리스트(부수효과/CTE/설명 금지)
     banned = r"(?is)\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|into|explain|with)\b"
     if re.search(banned, sql):
         raise ValueError("Blocked SQL keyword detected.")
@@ -118,7 +119,7 @@ def _validate_sql_is_select(sql: str):
 # ----------------- 페이지/테마 -----------------
 st.set_page_config(page_title="보험사 경영공시 데이터 챗봇", page_icon="📊", layout="centered")
 
-# Pretendard + 글로벌 스타일 (모바일 최적화 + 입력창 시인성 강화)
+# Pretendard + 글로벌 스타일
 st.markdown("""
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 <link rel="stylesheet" as="style" crossorigin
@@ -148,7 +149,7 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
   border: 1px solid #eef2f7;
 }
 .header { padding: 24px 20px 12px 20px; border-bottom: 1px solid #eef2f7; text-align: center; }
-.header h1 { margin: 0; padding: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+.header h1 { margin: 0; padding: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
 .header .byline { color: #6b7280; font-size: 13px; margin-top: 6px; opacity: .85; }
 .section { padding: 18px 20px 22px 20px; }
 
@@ -183,7 +184,7 @@ hr.sep { border:none; border-top:1px solid #eef2f7; margin: 18px 0; }
 pre, code { font-size: 13px !important; }
 
 @media (max-width: 640px) {
-  .header h1 { font-size: 22px; }
+  .header h1 { font-size: 28px; }
   .card-subtitle { font-size: 16px; }
   .input-like .stTextInput>div>div>input { height: 50px; font-size: 16px; }
 }
@@ -195,7 +196,7 @@ st.markdown('<div class="container-card fadein">', unsafe_allow_html=True)
 st.markdown("""
 <div class="header">
   <div style="display:flex; gap:10px; align-items:center; justify-content:center;">
-    <h1>보험사 경영공시 데이터 <span style="color:var(--text)">챗봇</span></h1>
+    <h1>보험사 경영공시 데이터 챗봇</h1>
     <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
          fill="none" stroke="#0064FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 8V4H8V8H12Z" />
@@ -212,7 +213,7 @@ st.markdown("""
       <path d="M22 4H20V2H22V4Z" />
     </svg>
   </div>
-  <div class="byline">made by 태훈 · 정형 데이터(SQL) 전용</div>
+  <div class="byline">made by 태훈 · 현철</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -230,7 +231,6 @@ def generate_sql(user_question: str) -> str:
         pass
 
     sql_agent = get_sql_agent()
-    # agent가 도구 실행을 시도하더라도 최종 텍스트에서 SELECT만 추출
     result = sql_agent.invoke({"input": user_question})
 
     if isinstance(result, dict):
@@ -240,8 +240,6 @@ def generate_sql(user_question: str) -> str:
 
     # 방탄 파서: 첫 SELECT 문만 추출 → 코드펜스/주석 제거 → 트리밍
     sql = _extract_first_select(text)
-
-    # 검증
     _validate_sql_is_select(sql)
 
     try:
@@ -298,20 +296,14 @@ q = st.text_input(
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ----------------- 버튼 & 흐름 -----------------
-c1, c2 = st.columns([1,1])
-with c1:
-    st.markdown('<p class="card-subtitle">① SQL 생성</p>', unsafe_allow_html=True)
-    make_sql = st.button("SQL 만들기", use_container_width=True)
-with c2:
-    st.markdown('<p class="card-subtitle">② SQL 실행</p>', unsafe_allow_html=True)
-    run_btn = st.button("실행", use_container_width=True)
+# ----------------- 버튼: 한 번에 생성+실행(+자동 요약) -----------------
+go_btn = st.button("실행", use_container_width=True)
 
-# SQL 만들기
-if make_sql:
+if go_btn:
     if not q:
         st.warning("질문을 입력하세요.")
     else:
+        # 1) SQL 생성
         with st.spinner("SQL을 생성하는 중..."):
             try:
                 sql = generate_sql(q)
@@ -319,20 +311,15 @@ if make_sql:
                 st.session_state["sql"] = sql
             except Exception as e:
                 st.error(f"SQL 생성 오류: {e}")
+                st.stop()
 
-st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
-
-# 실행
-if run_btn:
-    sql = st.session_state.get("sql")
-    if not sql:
-        st.warning("먼저 'SQL 만들기'를 클릭하세요.")
-    else:
+        # 2) 즉시 실행
         with st.spinner("DB에서 데이터 조회 중..."):
             try:
-                df = run_sql(sql)
+                df = run_sql(st.session_state["sql"])
                 if df.empty:
                     st.info("결과가 없습니다.")
+                    st.session_state["df"] = df  # 빈 DF도 상태에는 저장
                 else:
                     st.markdown('<div class="table-container">', unsafe_allow_html=True)
                     st.dataframe(df, use_container_width=True)
@@ -340,22 +327,34 @@ if run_btn:
                     st.session_state["df"] = df
             except Exception as e:
                 st.error(f"DB 실행 오류: {e}")
+                st.stop()
 
+        # 3) 자동 요약 생성 (새로 추가된 로직)
+        df_prev = st.session_state.get("df")
+        if df_prev is not None and not df_prev.empty:
+            with st.spinner("요약 생성 중..."):
+                try:
+                    summary = summarize_answer(q, df_prev)
+                    st.success(summary)
+                    st.session_state["summary"] = summary
+                except Exception as e:
+                    st.error(f"요약 오류: {e}")
+
+st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
+
+# 필요 시 요약 버튼(재생성 용도)
 df_prev = st.session_state.get("df")
 if df_prev is not None and not df_prev.empty:
-    col_a, _ = st.columns([1,1])
-    with col_a:
-        gen_sum = st.button("요약 생성", use_container_width=True)
-
-    if gen_sum:
+    if st.button("요약 생성", use_container_width=True):
         with st.spinner("요약 생성 중..."):
             try:
                 summary = summarize_answer(q, df_prev)
                 st.success(summary)
+                st.session_state["summary"] = summary
             except Exception as e:
                 st.error(f"요약 오류: {e}")
 else:
     st.caption("실행 결과가 표시되면 요약을 볼 수 있습니다.")
 
-st.markdown('</div>', unsafe_allow_html=True)  # container-card
-st.markdown('</div>', unsafe_allow_html=True)  # 상단 container-card 종료
+st.markdown('</div>', unsafe_allow_html=True)  # section 종료
+st.markdown('</div>', unsafe_allow_html=True)  # container-card 종료
