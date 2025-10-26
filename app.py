@@ -1,6 +1,5 @@
-# app.py — 안정 UI + Glow 100% 적용
+# app.py — Glow 완벽 적용 + 챗봇 아이콘 재작업
 import os
-import json
 import re
 import pandas as pd
 import streamlit as st
@@ -29,7 +28,7 @@ SQLALCHEMY_URI = (
 
 AGENT_PREFIX = """
 당신은 PostgreSQL SQL 전문가다.
-오직 SELECT만 작성.
+오직 SELECT만 작성하라.
 """
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
@@ -47,24 +46,23 @@ def get_sql_agent():
         prefix=AGENT_PREFIX,
     )
 
-# -------- 유틸 --------
-def _extract_first_select(text: str) -> str:
-    cleaned = text.strip()
-    m = re.search(r"(?i)select", cleaned)
+def _extract_first_select(text):
+    m = re.search(r"(?i)select", text)
     if not m:
-        return cleaned
-    begin = m.start()
-    sql = cleaned[begin:]
+        return text.strip()
+    sql = text[m.start():]
     semi = re.search(r";", sql)
     if semi:
         sql = sql[:semi.start()]
     return sql.strip()
 
-def _validate_sql(sql: str):
+def _validate_sql(sql):
     if not sql.lower().startswith("select"):
         raise ValueError("SELECT only")
 
-# -------- CSS --------
+st.set_page_config(page_title="보험사 경영공시 챗봇", page_icon="🤖", layout="centered")
+
+# ✅ CSS 재설계 (input 박스 자체가 Glow)
 st.markdown("""
 <style>
 :root { --blue:#0064FF; }
@@ -73,82 +71,80 @@ html, body, [data-testid="stAppViewContainer"] {
   background: #ECEEF1 !important;
 }
 
-* { font-family:'Pretendard',sans-serif !important; }
-
 .header { text-align:center; margin-top:40px; }
 .title { font-size:32px; font-weight:900; }
-.byline { color:#6b7280; font-size:13px; }
 
-/* ✅ 커스텀 Input Shell */
-.glow-wrap {
-  background:white; padding:12px 18px;
+.byline { color:#6b7280; font-size:13px; margin-bottom:30px; }
+
+.glow {
+  background:white;
   border-radius:999px;
   border:2px solid var(--blue);
-  display:flex; justify-content:center;
+  padding:3px 18px!important;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:55px;
   box-shadow:
     0 0 20px rgba(0,100,255,.55),
     0 0 40px rgba(0,100,255,.35);
   animation:glowPulse 2s infinite ease-in-out;
 }
 
-/* 🔥Glow 강력 효과 */
 @keyframes glowPulse {
   50% {
     box-shadow:
-      0 0 35px rgba(0,100,255,.85),
-      0 0 60px rgba(0,100,255,.45);
+      0 0 35px rgba(0,100,255,.9),
+      0 0 60px rgba(0,100,255,.5);
   }
 }
 
-/* ✅ Shadow DOM input 숨기고 투명화 */
-div[data-baseweb="input"] input {
-  background:transparent !important;
-  border:0 !important;
-  outline:none !important;
-  box-shadow:none !important;
-  height:32px !important;
+/* ✅ 진짜 Input 박스 완전 투명화 */
+input {
+  background:transparent!important;
+  border:none!important;
+  outline:none!important;
+  box-shadow:none!important;
+  width:100% !important;
+  height:40px!important;
+  font-size:17px!important;
+  font-weight:500!important;
 }
 
-button {
-  background:var(--blue) !important;
-  border-radius:999px !important;
-  font-size:17px !important;
-  font-weight:700 !important;
-  height:50px !important;
-}
-button:hover { opacity:.9 !important; }
-
-/* ✅ 아이콘 색상 강제 */
-.svgfix path {
-  fill: var(--blue) !important;
+/* ✅ 챗봇 아이콘 진짜 챗봇으로 (새 SVG) */
+.bot-icon svg path {
+  stroke:var(--blue)!important;
+  stroke-width:1.8!important;
+  fill:none!important;
 }
 </style>
 """, unsafe_allow_html=True)
 
+
 # ---------------- Header ----------------
 st.markdown("""
 <div class="header">
-  <div class="title">보험사 경영공시 챗봇
-    <svg class="svgfix" xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24">
-      <path d="M12 8V4H8V8H12Z"/>
-      <path d="M16 8V4H12V8H16Z"/>
-      <path d="M12 14V12H8V14H12Z"/>
-      <path d="M16 14V12H12V14H16Z"/>
-      <path d="M6 18H18V16H6V18Z"/>
-      <path d="M6 12H4V10H6V12Z"/>
-      <path d="M20 12H18V10H20V12Z"/>
-    </svg>
+  <div class="title">
+    보험사 경영공시 챗봇
+    <span class="bot-icon">
+      <svg width="35" height="35" viewBox="0 0 24 24">
+        <path d="M12 2 L15 6 H21 V16 H3 V6 H9 Z"/>
+        <circle cx="9" cy="11" r="1.5"/>
+        <circle cx="15" cy="11" r="1.5"/>
+      </svg>
+    </span>
   </div>
   <div class="byline">made by 태훈 · 현철</div>
 </div>
 """, unsafe_allow_html=True)
 
-# -------- Input + Glow Wrapper --------
-with st.container():
-    st.markdown('<div class="glow-wrap">', unsafe_allow_html=True)
-    q = st.text_input("question", label_visibility="collapsed",
-                      placeholder="예) 2023년 농협생명 K-ICS비율 알려줘")
-    st.markdown('</div>', unsafe_allow_html=True)
+
+# ✅ Glow Wrapper + Input 일체화
+st.markdown('<div class="glow">', unsafe_allow_html=True)
+q = st.text_input("질문", placeholder="예) 2023년 농협생명 K-ICS비율 알려줘", label_visibility="collapsed")
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.write("")  # 입력창과 실행버튼 간 간격
 
 if st.button("실행", use_container_width=True):
     if not q:
@@ -157,10 +153,8 @@ if st.button("실행", use_container_width=True):
         try:
             agent = get_sql_agent()
             res = agent.invoke({"input": q})
-            text = res.get("output") or res.get("final_answer")
-            sql = _extract_first_select(text)
+            sql = _extract_first_select(res.get("output") or res.get("final_answer"))
             _validate_sql(sql)
-
             df = pd.read_sql_query(sql,
                 psycopg.connect(host=DB_HOST, dbname=DB_NAME,
                                 user=DB_USER, password=DB_PASS,
@@ -171,10 +165,10 @@ if st.button("실행", use_container_width=True):
 
             if not df.empty:
                 preview = df.head(20).to_csv(index=False)
-                msg = client.chat.completions.create(
+                m = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role":"user","content":f"{preview}\n3문장 요약"}]
                 )
-                st.success(msg.choices[0].message.content.strip())
+                st.success(m.choices[0].message.content.strip())
         except Exception as e:
             st.error(f"오류: {e}")
