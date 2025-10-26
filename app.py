@@ -145,22 +145,22 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 
 /* ====== 헤더/타이틀 - 모바일 한 줄 고정 ====== */
 .header {
-  padding: 39px 20px 12px 20px;  /* ⬅ 상단 여백 +15px (약 15pt) */
+  padding: 39px 20px 12px 20px;
   border-bottom: 1px solid #eef2f7;
   text-align: center;
 }
 .title-row {
   display: flex; align-items: center; justify-content: center;
-  gap: 5px; /* ✅ 1번: 간격 10px -> 5px로 좁힘 */
+  gap: 2px; /* ✅ 1번: 간격을 2px로 좁혀 거의 붙도록 수정 */
   flex-wrap: nowrap; max-width: 100%;
 }
 .header h1 {
   margin: 0; padding: 0;
   font-size: clamp(22px, 5.5vw, 36px);
   font-weight: 800; letter-spacing: -0.02em; color: var(--text);
-  white-space: nowrap;        /* ✅ 한 줄 강제 */
-  overflow: hidden;           /* ✅ 넘치면 숨김 */
-  text-overflow: ellipsis;    /* ✅ 말줄임표 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   max-width: 100%;
 }
 .header svg { 
@@ -177,12 +177,12 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 .input-like .stTextInput>div>div>input {
   height: 56px; font-size: 17px; padding: 0 20px;
   background:#ffffff; border:1px solid #0064FF;
-  border-radius: 9999px;  /* pill */
+  border-radius: 9999px;
   box-shadow:
     0 0 15px rgba(0, 100, 255, 0.5), 
     0 0 30px rgba(0, 100, 255, 0.3), 
     0 0 45px rgba(0, 100, 255, 0.2); 
-  animation: glowPulse 2.2s infinite ease-in-out; /* ✨ 반짝반짝 */
+  animation: glowPulse 2.2s infinite ease-in-out;
 }
 .input-like .stTextInput>div>div>input:focus {
   outline: none;
@@ -191,9 +191,8 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
     0 0 18px rgba(0, 100, 255, 0.8), 
     0 0 36px rgba(0, 100, 255, 0.5), 
     0 0 48px rgba(0, 100, 255, 0.4); 
-  animation: glowPulseFast 1.4s infinite ease-in-out; /* 더 강한 반짝 */
+  animation: glowPulseFast 1.4s infinite ease-in-out;
 }
-/* ✨ 반짝이는 Keyframes */
 @keyframes glowPulse {
   0%, 100% {
     box-shadow:
@@ -223,7 +222,7 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
   }
 }
 
-/* 버튼 기본(전체폭) → 이번엔 절반폭으로 중앙 정렬은 컬럼으로 처리 */
+/* 버튼 */
 .stButton>button {
   width:100%; height:48px; font-weight:700; font-size:16px;
   color:#fff; background: var(--blue);
@@ -278,7 +277,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ===== 실행 결과가 들어갈 상단 슬롯 (타이틀과 프롬프트 사이) =====
-# ✅ 3번: 결과가 표시될 위치. (헤더와 입력창 사이)
 result_area = st.container()    # <- 여기에 실행 결과를 그린다.
 
 # ===================== 입력 섹션 =====================
@@ -324,6 +322,7 @@ def run_sql(sql: str) -> pd.DataFrame:
     ) as conn:
         return pd.read_sql_query(sql, conn)
 
+# ✅ 2번 수정: 함수 내의 불필요한 st.code(summary_text) 제거
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
     preview_csv = df.head(20).to_csv(index=False)
     prompt = f"""질문: {q}
@@ -343,12 +342,9 @@ CSV 미리보기(최대 20행):
         temperature=0.2
     )
     summary_text = r.choices[0].message.content.strip()
-
-    try:
-        st.caption("OpenAI 응답 (요약)")
-        st.code(summary_text)
-    except Exception:
-        pass
+    
+    # st.code(summary_text) <- 이 부분이 스크린샷의 회색 상자를 만들었으므로 삭제.
+    
     return summary_text
 
 # ----------------- 입력창 -----------------
@@ -369,7 +365,7 @@ with c2:
 # 클릭 시: 결과는 상단 result_area에 그리기
 if go_btn:
     if not q:
-        with result_area: # ✅ 3번 위치에 경고 표시
+        with result_area:
             st.warning("질문을 입력하세요.")
     else:
         # 1) SQL 생성
@@ -377,7 +373,7 @@ if go_btn:
             sql = generate_sql(q)
             st.session_state["sql"] = sql
         except Exception as e:
-            with result_area: # ✅ 3번 위치에 오류 표시
+            with result_area:
                 st.error(f"SQL 생성 오류: {e}")
             st.stop()
 
@@ -385,7 +381,7 @@ if go_btn:
         try:
             df = run_sql(st.session_state["sql"])
             st.session_state["df"] = df
-            with result_area: # ✅ 3번 위치에 결과 테이블 표시
+            with result_area:
                 st.markdown('<div class="section">', unsafe_allow_html=True)
                 st.markdown('#### 실행 결과')
                 if df.empty:
@@ -396,7 +392,7 @@ if go_btn:
                     st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
         except Exception as e:
-            with result_area: # ✅ 3번 위치에 오류 표시
+            with result_area:
                 st.error(f"DB 실행 오류: {e}")
             st.stop()
 
@@ -404,13 +400,14 @@ if go_btn:
         df_prev = st.session_state.get("df")
         if df_prev is not None and not df_prev.empty:
             try:
-                with result_area: # ✅ 3번 위치에 요약 표시
+                with result_area:
                     with st.spinner("요약 생성 중..."):
                         summary = summarize_answer(q, df_prev)
+                        # ✅ 2번 수정: 이제 st.success로만 요약이 표시됨
                         st.success(summary)
                         st.session_state["summary"] = summary
             except Exception as e:
-                with result_area: # ✅ 3번 위치에 오류 표시
+                with result_area:
                     st.error(f"요약 오류: {e}")
 
 st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
@@ -419,7 +416,7 @@ st.markdown('<hr class="sep"/>', unsafe_allow_html=True)
 df_prev = st.session_state.get("df")
 if df_prev is not None and not df_prev.empty:
     if st.button("요약 생성", use_container_width=True):
-        with result_area: # ✅ 3번 위치에 요약 표시 (재생성)
+        with result_area:
             with st.spinner("요약 생성 중..."):
                 try:
                     summary = summarize_answer(q, df_prev)
