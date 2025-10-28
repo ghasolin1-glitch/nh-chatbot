@@ -301,7 +301,7 @@ def run_sql(sql: str) -> pd.DataFrame:
 
 # ----------------- 요약 생성 -----------------
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
-    preview_csv = df.head(20).to_csv(index=False)
+    preview_csv = df.to_csv(index=False)
     prompt = f"""
 질문: {q}
 너는 뛰어난 재무분석가이자 데이터 시각화 전문가야.
