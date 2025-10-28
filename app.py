@@ -301,18 +301,24 @@ def run_sql(sql: str) -> pd.DataFrame:
 # ----------------- 요약 생성 -----------------
 def summarize_answer(q: str, df: pd.DataFrame) -> str:
     preview_csv = df.head(20).to_csv(index=False)
-    prompt = f"""질문: {q}
-    너는 뛰어난 재무분석가야.  아래 CSV 일부를 참고해서 한국어 요약을 써줘. 단위와 기간을 분명히 써.
-CSV :
+    prompt = f"""
+질문: {q}
+너는 뛰어난 재무분석가이자 데이터 시각화 전문가야.
+다음 CSV 데이터를 기반으로, 트렌드를 분석해 **한국어로 간결하게 요약**해줘.
+- 수치의 단위와 기간을 반드시 명시해.
+- 데이터 패턴(증가/감소, 최고점, 평균 등)을 설명해.
+- 이후 Python 코드가 차트를 자동 생성할 것이므로, 시각화에 필요한 주요 컬럼 1~2개를 명시적으로 언급해.
+예: 'closing_ym'을 X축으로, 'k_ics_ratio'를 Y축으로 사용하면 좋겠다.
+CSV 일부 샘플:
 {preview_csv}
 """
     r = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role":"user","content": prompt}],
+        messages=[{"role": "user", "content": prompt}],
         temperature=0.2
     )
-    summary_text = r.choices[0].message.content.strip()
-    return summary_text
+    return r.choices[0].message.content.strip()
+
 
 # ----------------- 입력창 -----------------
 st.markdown('<div class="input-like">', unsafe_allow_html=True)
@@ -376,6 +382,39 @@ if go_btn:
                             with st.spinner("요약 생성 중..."):
                                 summary = summarize_answer(q, df)
                                 st.success(summary)
+                                # 3) 자동 요약 생성만 표시
+                                if df is not None and not df.empty:
+                                    try:
+                                        status.write("③ 요약 생성 중...")
+                                        with result_area:
+                                            with st.spinner("요약 생성 중..."):
+                                                summary = summarize_answer(q, df)
+                                                st.success(summary)
+                                                st.session_state["summary"] = summary
+
+                                                # ✅ 차트 자동 생성
+                                                try:
+                                                    # 컬럼명 자동 감지
+                                                    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+                                                    date_cols = [c for c in df.columns if re.search(r"(date|ym|month|year)", c, re.I)]
+
+                                                    if numeric_cols and date_cols:
+                                                        x_col = date_cols[0]
+                                                        y_col = numeric_cols[0]
+                                                        st.markdown("### 📈 데이터 시각화")
+                                                        st.line_chart(df.set_index(x_col)[y_col])
+                                                    elif numeric_cols:
+                                                        st.markdown("### 📊 데이터 분포")
+                                                        st.bar_chart(df[numeric_cols[:2]])
+                                                except Exception as e:
+                                                    st.info(f"차트를 생성할 수 없습니다: {e}")
+
+                                        status.update(label="요약 완료 ✅", state="complete")
+                                    except Exception as e:
+                                        status.update(label="요약 오류 ❌", state="error")
+                                        with result_area:
+                                            st.error(f"요약 오류: {e}")
+
                                 st.session_state["summary"] = summary
                         status.update(label="요약 완료 ✅", state="complete")
                     except Exception as e:
