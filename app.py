@@ -240,6 +240,26 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 .table-container .stDataFrame { border-radius:12px; overflow:hidden; border: 1px solid #e5e7eb; }
 .fadein { animation: fadeIn .5s ease; }
 @keyframes fadeIn { from{opacity:0; transform: translateY(6px)} to{opacity:1; transform:none} }
+            
+/* ✅ expander 내부에서 글자 겹침 방지 및 코드 영역 정렬 */
+.streamlit-expanderContent {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.streamlit-expanderContent pre {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+  overflow-x: auto !important;
+  font-size: 14px !important;
+  line-height: 1.5em !important;
+}
+
+.streamlit-expanderHeader {
+  font-weight: 600 !important;
+}
+
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -388,34 +408,6 @@ if go_btn:
                                 st.success(summary)
                                 st.session_state["summary"] = summary
 
-                                # ✅ 요약 결과 아래에 SQL 쿼리 및 프롬프트/결과 보기 토글 추가
-                                with st.expander("🔍 SQL 요청 및 결과 보기", expanded=False):
-                                    st.markdown("### 🧩 생성된 SQL 문")
-                                    st.code(st.session_state.get("sql", ""), language="sql")
-
-                                    st.markdown("### 💬 SQL 생성 프롬프트")
-                                    sql_prompt = AGENT_PREFIX.strip()
-                                    st.code(sql_prompt, language="markdown")
-
-                                    st.markdown("### 💬 요약 생성 프롬프트")
-                                    if "df" in st.session_state:
-                                        sample_preview = st.session_state["df"].head(3).to_csv(index=False)
-                                        summary_prompt = f"""
-                                질문: {q}
-
-                                너는 뛰어난 재무분석가이자 데이터 시각화 전문가야.
-                                다음 CSV 데이터를 기반으로, 트렌드를 분석해 **한국어로 간결하게 요약**해줘.
-                                - 수치의 단위와 기간을 반드시 명시해.
-                                - 데이터 패턴(증가/감소, 최고점, 평균 등)을 설명해.
-                                - 이후 Python 코드가 차트를 자동 생성할 것이므로, 시각화에 필요한 주요 컬럼 1~2개를 명시적으로 언급해.
-                                CSV 일부 샘플:
-                                {sample_preview}
-                                """
-                                        st.code(summary_prompt.strip(), language="markdown")
-
-                                    st.markdown("### 📊 쿼리 결과(DataFrame)")
-                                    st.dataframe(st.session_state.get("df"), use_container_width=True)
-
 
                                 # ✅ Altair 기반 시각화 (matplotlib 제거)
                                 import altair as alt
@@ -478,6 +470,35 @@ if go_btn:
 
                                 except Exception as e:
                                     st.info(f"차트를 생성할 수 없습니다: {e}")
+
+                                # ✅ 요약 결과 아래에 SQL 쿼리 및 프롬프트/결과 보기 토글 추가
+                                with st.expander("🔍 SQL 요청 및 결과 보기", expanded=False):
+                                    st.markdown("### 🧩 생성된 SQL 문")
+                                    st.code(st.session_state.get("sql", ""), language="sql")
+
+                                    st.markdown("### 💬 SQL 생성 프롬프트")
+                                    sql_prompt = AGENT_PREFIX.strip()
+                                    st.code(sql_prompt, language="markdown")
+
+                                    st.markdown("### 💬 요약 생성 프롬프트")
+                                    if "df" in st.session_state:
+                                        sample_preview = st.session_state["df"].head(3).to_csv(index=False)
+                                        summary_prompt = f"""
+                                질문: {q}
+
+                                너는 뛰어난 재무분석가이자 데이터 시각화 전문가야.
+                                다음 CSV 데이터를 기반으로, 트렌드를 분석해 **한국어로 간결하게 요약**해줘.
+                                - 수치의 단위와 기간을 반드시 명시해.
+                                - 데이터 패턴(증가/감소, 최고점, 평균 등)을 설명해.
+                                - 이후 Python 코드가 차트를 자동 생성할 것이므로, 시각화에 필요한 주요 컬럼 1~2개를 명시적으로 언급해.
+                                CSV 일부 샘플:
+                                {sample_preview}
+                                """
+                                        st.code(summary_prompt.strip(), language="markdown")
+
+                                    st.markdown("### 📊 쿼리 결과(DataFrame)")
+                                    st.dataframe(st.session_state.get("df"), use_container_width=True)
+
 
 
 
