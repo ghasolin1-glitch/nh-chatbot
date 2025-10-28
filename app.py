@@ -6,6 +6,8 @@ import re
 import pandas as pd
 import streamlit as st
 import psycopg
+import matplotlib
+matplotlib.use("Agg")  # Streamlit Cloud에서 필수
 import matplotlib.pyplot as plt
 
 # ====== LangChain / OpenAI LLM ======
@@ -383,7 +385,7 @@ if go_btn:
                         with result_area:
                             with st.spinner("요약 생성 중..."):
                                 summary = summarize_answer(q, df)
-                                
+
                                 # ✅ "시각화 제안" 및 "시각화에 필요한 주요 컬럼" 문구 자동 제거
                                 cleaned_summary = re.sub(
                                     r"(?s)(시각화\s*제안[:：]?.*?(데이터 요약|데이터 패턴|$))", 
