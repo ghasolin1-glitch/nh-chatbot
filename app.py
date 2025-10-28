@@ -241,22 +241,32 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
 .fadein { animation: fadeIn .5s ease; }
 @keyframes fadeIn { from{opacity:0; transform: translateY(6px)} to{opacity:1; transform:none} }
             
-/* ✅ expander 내부에서 글자 겹침 방지 및 코드 영역 정렬 */
+/* ✅ expander 내부에서 코드/텍스트 겹침 완전 방지 */
 .streamlit-expanderContent {
   white-space: normal !important;
   overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
-.streamlit-expanderContent pre {
+.streamlit-expanderContent pre, 
+.streamlit-expanderContent code {
   white-space: pre-wrap !important;
-  word-break: break-all !important;
+  word-break: break-word !important;
   overflow-x: auto !important;
+  overflow-y: auto !important;
+  display: block !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
   font-size: 14px !important;
   line-height: 1.5em !important;
+  background-color: #f9fafb !important;
+  padding: 10px 12px !important;
+  border-radius: 8px !important;
 }
 
 .streamlit-expanderHeader {
   font-weight: 600 !important;
+  font-size: 16px !important;
 }
 
 
