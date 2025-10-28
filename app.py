@@ -269,20 +269,6 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg) !importan
   font-size: 16px !important;
 }
 
-            /* ====== 텍스트 색상 강제: 모바일 다크모드에서도 검정 유지 ====== */
-@media (prefers-color-scheme: dark), (prefers-color-scheme: light) {
-  html, body, [data-testid="stAppViewContainer"], * {
-    color: #0F172A !important;           /* 모든 글씨 검정으로 고정 */
-    background-color: transparent !important;
-  }
-}
-
-/* 제목(시계열 추이 등) 색상 강제 */
-h1, h2, h3, h4, h5, h6, .stMarkdown, .stText, .stHeader, .stSubheader {
-  color: #0F172A !important;
-}
-
-
 </style>
 """, unsafe_allow_html=True)
 
