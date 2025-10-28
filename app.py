@@ -415,7 +415,24 @@ if go_btn:
                                 summary = summarize_answer(q, df)
 
                                 # ✅ 최종 요약 결과 표시
-                                st.success(summary)
+                                # ✅ 요약결과를 밝은 회색 카드로 표시
+                                st.markdown(
+                                    f"""
+                                    <div style="
+                                        background-color:#F5F6F8;
+                                        color:#0F172A;
+                                        padding:18px 22px;
+                                        border-radius:12px;
+                                        font-size:16px;
+                                        line-height:1.6em;
+                                        border:1px solid #E5E7EB;
+                                        ">
+                                        {summary}
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+
                                 st.session_state["summary"] = summary
 
 
@@ -433,16 +450,18 @@ if go_btn:
                                         y_col = numeric_cols[0]
                                         st.markdown("### 📊 데이터 분포 (회사별)")
 
+                                        # 공통 옵션: 글자색 검정, 축색 검정
                                         chart = (
                                             alt.Chart(df)
                                             .mark_bar(color="#0064FF")
                                             .encode(
-                                                x=alt.X(x_col, sort='-y', title=x_col),
-                                                y=alt.Y(y_col, title=y_col),
+                                                x=alt.X(x_col, sort='-y', title=x_col, axis=alt.Axis(labelColor="#0F172A", titleColor="#0F172A")),
+                                                y=alt.Y(y_col, title=y_col, axis=alt.Axis(labelColor="#0F172A", titleColor="#0F172A")),
                                                 tooltip=[x_col, y_col]
                                             )
-                                            .properties(width="container", height=400, background="#FFFBEA")
+                                            .properties(width="container", height=400, background="#F5F6F8")  # 밝은 회색 배경
                                         )
+
 
                                         # ✅ 수치 라벨 추가 (Altair text layer)
                                         text = (
@@ -469,12 +488,13 @@ if go_btn:
                                             alt.Chart(df)
                                             .mark_line(color="#0064FF", point=True)
                                             .encode(
-                                                x=alt.X(x_col, title=x_col),
-                                                y=alt.Y(y_col, title=y_col),
+                                                x=alt.X(x_col, title=x_col, axis=alt.Axis(labelColor="#0F172A", titleColor="#0F172A")),
+                                                y=alt.Y(y_col, title=y_col, axis=alt.Axis(labelColor="#0F172A", titleColor="#0F172A")),
                                                 tooltip=[x_col, y_col]
                                             )
-                                            .properties(width="container", height=400, background="#FFFBEA")
+                                            .properties(width="container", height=400, background="#F5F6F8")
                                         )
+
 
                                         st.altair_chart(line, use_container_width=True)
 
