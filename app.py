@@ -334,44 +334,56 @@ with c2:
 result_area = st.container()
 
 # 클릭 시: 결과는 'result_area'에 그리기
-# 클릭 시: 결과는 'result_area'에 그리기
 if go_btn:
     if not q:
         with result_area:
             st.warning("질문을 입력하세요.")
     else:
-        # 1) SQL 생성
-        try:
-            sql = generate_sql(q)
-            st.session_state["sql"] = sql
-        except Exception as e:
-            with result_area:
-                st.error(f"SQL 생성 오류: {e}")
-            st.stop()
-
-        # 2) SQL 실행만 (표 출력 생략)
-        try:
-            df = run_sql(st.session_state["sql"])
-            st.session_state["df"] = df
-        except Exception as e:
-            with result_area:
-                st.error(f"DB 실행 오류: {e}")
-            st.stop()
-
-        # 3) 자동 요약 생성만 표시
-        if df is not None and not df.empty:
+        # ✅ 진행상황 표시 시작
+        with st.status("진행 중입니다...", expanded=True) as status:
+            # 1) SQL 생성
             try:
-                with result_area:
-                    with st.spinner("요약 생성 중..."):
-                        summary = summarize_answer(q, df)
-                        st.success(summary)  # ✅ 표 없이 요약만 표시
-                        st.session_state["summary"] = summary
+                status.write("① SQL 생성 중...")
+                sql = generate_sql(q)
+                st.session_state["sql"] = sql
+                status.update(label="SQL 생성 완료 ✅", state="running")
             except Exception as e:
+                status.update(label="SQL 생성 오류 ❌", state="error")
                 with result_area:
-                    st.error(f"요약 오류: {e}")
-        else:
-            with result_area:
-                st.info("데이터가 없습니다. 다른 질문을 입력해보세요.")
+                    st.error(f"SQL 생성 오류: {e}")
+                st.stop()
+
+            # 2) SQL 실행만 (표 출력 생략)
+            try:
+                status.write("② 데이터 조회 중...")
+                df = run_sql(st.session_state["sql"])
+                st.session_state["df"] = df
+                status.update(label="데이터 조회 완료 ✅", state="running")
+            except Exception as e:
+                status.update(label="DB 실행 오류 ❌", state="error")
+                with result_area:
+                    st.error(f"DB 실행 오류: {e}")
+                st.stop()
+
+            # 3) 자동 요약 생성만 표시
+            if df is not None and not df.empty:
+                try:
+                    status.write("③ 요약 생성 중...")
+                    with result_area:
+                        with st.spinner("요약 생성 중..."):
+                            summary = summarize_answer(q, df)
+                            st.success(summary)  # ✅ 표 없이 요약만 표시
+                            st.session_state["summary"] = summary
+                    status.update(label="요약 완료 ✅", state="complete")
+                except Exception as e:
+                    status.update(label="요약 오류 ❌", state="error")
+                    with result_area:
+                        st.error(f"요약 오류: {e}")
+            else:
+                status.update(label="데이터 없음 ⚠️", state="error")
+                with result_area:
+                    st.info("데이터가 없습니다. 다른 질문을 입력해보세요.")
+
 
 
 st.markdown('</div>', unsafe_allow_html=True)  # section 종료
