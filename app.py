@@ -374,49 +374,45 @@ if go_btn:
                         st.error(f"DB 실행 오류: {e}")
                     st.stop()
 
-                # 3) 요약 생성
+                # 3) 자동 요약 생성만 표시
                 if df is not None and not df.empty:
                     try:
                         status.write("③ 요약 생성 중...")
+
                         with result_area:
                             with st.spinner("요약 생성 중..."):
                                 summary = summarize_answer(q, df)
-                                st.success(summary)
-                                # 3) 자동 요약 생성만 표시
-                                if df is not None and not df.empty:
-                                    try:
-                                        status.write("③ 요약 생성 중...")
-                                        with result_area:
-                                            with st.spinner("요약 생성 중..."):
-                                                summary = summarize_answer(q, df)
-                                                st.success(summary)
-                                                st.session_state["summary"] = summary
 
-                                                # ✅ 차트 자동 생성
-                                                try:
-                                                    # 컬럼명 자동 감지
-                                                    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-                                                    date_cols = [c for c in df.columns if re.search(r"(date|ym|month|year)", c, re.I)]
+                                # ✅ "시각화 제안" 문구 자동 제거
+                                cleaned_summary = re.sub(
+                                    r"(?s)시각화\s*제안[:：].*?(데이터 요약|데이터 패턴|$)",
+                                    "데이터 요약",
+                                    summary
+                                )
+                                cleaned_summary = re.sub(r"(?s)시각화\s*제안.*", "", cleaned_summary).strip()
 
-                                                    if numeric_cols and date_cols:
-                                                        x_col = date_cols[0]
-                                                        y_col = numeric_cols[0]
-                                                        st.markdown("### 📈 데이터 시각화")
-                                                        st.line_chart(df.set_index(x_col)[y_col])
-                                                    elif numeric_cols:
-                                                        st.markdown("### 📊 데이터 분포")
-                                                        st.bar_chart(df[numeric_cols[:2]])
-                                                except Exception as e:
-                                                    st.info(f"차트를 생성할 수 없습니다: {e}")
+                                # ✅ 최종 결과 한 번만 표시
+                                st.success(cleaned_summary)
+                                st.session_state["summary"] = cleaned_summary
 
-                                        status.update(label="요약 완료 ✅", state="complete")
-                                    except Exception as e:
-                                        status.update(label="요약 오류 ❌", state="error")
-                                        with result_area:
-                                            st.error(f"요약 오류: {e}")
+                                # ✅ 차트 자동 생성
+                                try:
+                                    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+                                    date_cols = [c for c in df.columns if re.search(r"(date|ym|month|year)", c, re.I)]
 
-                                st.session_state["summary"] = summary
+                                    if numeric_cols and date_cols:
+                                        x_col = date_cols[0]
+                                        y_col = numeric_cols[0]
+                                        st.markdown("### 📈 데이터 시각화")
+                                        st.line_chart(df.set_index(x_col)[y_col])
+                                    elif numeric_cols:
+                                        st.markdown("### 📊 데이터 분포")
+                                        st.bar_chart(df[numeric_cols[:2]])
+                                except Exception as e:
+                                    st.info(f"차트를 생성할 수 없습니다: {e}")
+
                         status.update(label="요약 완료 ✅", state="complete")
+
                     except Exception as e:
                         status.update(label="요약 오류 ❌", state="error")
                         with result_area:
@@ -428,6 +424,7 @@ if go_btn:
 
         # ✅ 최종 결과가 나오면 진행상황 박스를 제거
         status_placeholder.empty()
+
 
 st.markdown('</div>', unsafe_allow_html=True)  # section 종료
 st.markdown('</div>', unsafe_allow_html=True)  # container-card 종료
