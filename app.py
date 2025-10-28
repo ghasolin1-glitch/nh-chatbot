@@ -6,9 +6,7 @@ import re
 import pandas as pd
 import streamlit as st
 import psycopg
-import matplotlib
-matplotlib.use("Agg")  # Streamlit Cloud에서 필수
-import matplotlib.pyplot as plt
+
 
 # ====== LangChain / OpenAI LLM ======
 from langchain_community.utilities import SQLDatabase
@@ -386,76 +384,72 @@ if go_btn:
                             with st.spinner("요약 생성 중..."):
                                 summary = summarize_answer(q, df)
 
-                                # ✅ "시각화 제안" 및 "시각화에 필요한 주요 컬럼" 문구 자동 제거
-                                cleaned_summary = re.sub(
-                                    r"(?s)(시각화\s*제안[:：]?.*?(데이터 요약|데이터 패턴|$))", 
-                                    "데이터 요약", summary
-                                )
-                                cleaned_summary = re.sub(r"(?s)시각화\s*제안.*", "", cleaned_summary)
-                                cleaned_summary = re.sub(r"(?s)시각화에\s*필요한\s*주요\s*컬럼[:：]?.*", "", cleaned_summary)
-                                cleaned_summary = cleaned_summary.strip()
-
                                 # ✅ 최종 요약 결과 표시
-                                st.success(cleaned_summary)
-                                st.session_state["summary"] = cleaned_summary
+                                st.success(summary)
+                                st.session_state["summary"] = summary
 
-                                # ✅ 고급 시각화 (NH농협 블루 + 연노랑 배경 + 라벨 표시)
-                                import matplotlib.pyplot as plt
+                                # ✅ Altair 기반 시각화 (matplotlib 제거)
+                                import altair as alt
 
                                 try:
                                     numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
                                     date_cols = [c for c in df.columns if re.search(r"(date|ym|month|year)", c, re.I)]
                                     cat_cols = [c for c in df.columns if re.search(r"(name|company|보험|사명)", c, re.I)]
 
+                                    # --- 1️⃣ 회사별 분포 (막대그래프) ---
                                     if numeric_cols and cat_cols:
                                         x_col = cat_cols[0]
                                         y_col = numeric_cols[0]
-
                                         st.markdown("### 📊 데이터 분포 (회사별)")
-                                        df_sorted = df.sort_values(by=y_col, ascending=False)
 
-                                        fig, ax = plt.subplots(figsize=(9,4.5))
-                                        fig.patch.set_facecolor("#FFFBEA")
-                                        ax.set_facecolor("#FFFBEA")
+                                        chart = (
+                                            alt.Chart(df)
+                                            .mark_bar(color="#0064FF")
+                                            .encode(
+                                                x=alt.X(x_col, sort='-y', title=x_col),
+                                                y=alt.Y(y_col, title=y_col),
+                                                tooltip=[x_col, y_col]
+                                            )
+                                            .properties(width="container", height=400, background="#FFFBEA")
+                                        )
 
-                                        bars = ax.bar(df_sorted[x_col], df_sorted[y_col], color="#0064FF", edgecolor="none")
-                                        ax.set_xticklabels(df_sorted[x_col], rotation=45, ha="right", fontsize=9)
-                                        ax.set_ylabel(y_col, fontsize=10)
-                                        ax.set_xlabel(x_col, fontsize=10)
-                                        ax.grid(alpha=0.2)
+                                        # ✅ 수치 라벨 추가 (Altair text layer)
+                                        text = (
+                                            alt.Chart(df)
+                                            .mark_text(
+                                                align='center',
+                                                baseline='bottom',
+                                                dy=-3,
+                                                color="#0F172A",
+                                                fontSize=10
+                                            )
+                                            .encode(x=x_col, y=y_col, text=alt.Text(y_col, format=".1f"))
+                                        )
 
-                                        # ✅ 각 막대 위에 수치 표시
-                                        for bar in bars:
-                                            height = bar.get_height()
-                                            ax.text(bar.get_x() + bar.get_width()/2, height + (height*0.02),
-                                                    f"{height:.1f}", ha='center', va='bottom', fontsize=9, color="#0F172A")
+                                        st.altair_chart(chart + text, use_container_width=True)
 
-                                        st.pyplot(fig)
-
+                                    # --- 2️⃣ 시계열 추이 (선그래프) ---
                                     elif numeric_cols and date_cols:
                                         x_col = date_cols[0]
                                         y_col = numeric_cols[0]
-
                                         st.markdown("### 📈 시계열 추이")
-                                        df_sorted = df.sort_values(by=x_col)
-                                        fig, ax = plt.subplots(figsize=(8,4.5))
-                                        fig.patch.set_facecolor("#FFFBEA")
-                                        ax.set_facecolor("#FFFBEA")
 
-                                        ax.plot(df_sorted[x_col], df_sorted[y_col], marker='o', color="#0064FF", linewidth=2.2)
-                                        ax.fill_between(df_sorted[x_col], df_sorted[y_col], color="#0064FF", alpha=0.1)
-                                        ax.set_xlabel(x_col, fontsize=10)
-                                        ax.set_ylabel(y_col, fontsize=10)
-                                        ax.grid(alpha=0.25)
+                                        line = (
+                                            alt.Chart(df)
+                                            .mark_line(color="#0064FF", point=True)
+                                            .encode(
+                                                x=alt.X(x_col, title=x_col),
+                                                y=alt.Y(y_col, title=y_col),
+                                                tooltip=[x_col, y_col]
+                                            )
+                                            .properties(width="container", height=400, background="#FFFBEA")
+                                        )
 
-                                        # ✅ 각 점 위에 값 표시
-                                        for i, val in enumerate(df_sorted[y_col]):
-                                            ax.text(df_sorted[x_col].iloc[i], val, f"{val:.1f}", ha='center', va='bottom', fontsize=8, color="#0F172A")
-
-                                        st.pyplot(fig)
+                                        st.altair_chart(line, use_container_width=True)
 
                                 except Exception as e:
                                     st.info(f"차트를 생성할 수 없습니다: {e}")
+
 
 
                         status.update(label="요약 완료 ✅", state="complete")
