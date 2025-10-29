@@ -354,7 +354,7 @@ CSV 일부 샘플:
 st.markdown('<div class="input-like">', unsafe_allow_html=True)
 q = st.text_input(
     label="질문",
-    placeholder="예) 2023년 NH농협생명 K-ICS비율 월별 추이 보여줘",
+    placeholder="예)23년12월 농협생명 K-ICS비율 알려줘",
     label_visibility="collapsed",
     key="q_input"
 )
@@ -515,14 +515,14 @@ if go_btn:
                                     if "df" in st.session_state:
                                         sample_preview = st.session_state["df"].head(3).to_csv(index=False)
                                         summary_prompt = f"""
-                                질문: {q}
-
-                                너는 뛰어난 재무분석가이자 데이터 시각화 전문가야.
-                                다음 CSV 데이터를 기반으로, 트렌드를 분석해 **한국어로 간결하게 요약**해줘.
-                                - 수치의 단위와 기간을 반드시 명시해.
-                                - 데이터 패턴(증가/감소, 최고점, 평균 등)을 설명해.
-                                - 이후 Python 코드가 차트를 자동 생성할 것이므로, 시각화에 필요한 주요 컬럼 1~2개를 명시적으로 언급해.
-                                CSV 일부 샘플:
+                                        질문: {q}
+                                        너는 뛰어난 재무분석가이자 데이터 시각화 전문가야.
+                                        다음 CSV 데이터를 기반으로, 트렌드를 분석해 **한국어로 요약**해줘.
+                                        - 수치의 단위와 기간을 반드시 명시해.
+                                        - 데이터 패턴(증가/감소, 최고점, 평균 등)을 설명해.
+                                        - 이후 Python 코드가 차트를 자동 생성할 것이므로, 시각화에 필요한 주요 컬럼 1~2개를 명시적으로 언급해.
+                                        예: 'closing_ym'을 X축으로, 'k_ics_ratio'를 Y축으로 사용하면 좋겠다.
+                                        CSV 일부 샘플:
                                 {sample_preview}
                                 """
                                         st.code(summary_prompt.strip(), language="markdown")
